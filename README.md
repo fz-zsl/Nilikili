@@ -22,7 +22,7 @@ template to start your work.
   option, which provides the platform-independent sorting result.
   > ```sql
   > CREATE DATABASE sustc WITH ENCODING = 'UTF8' LC_COLLATE = 'C' TEMPLATE = template0;
-  >```
+  > ```
 
 ## Getting started
 
