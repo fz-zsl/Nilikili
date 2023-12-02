@@ -270,12 +270,109 @@ insert into danmu_info (bv, senderMid, showtime, content, posttime)
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
+			stmt.clearBatch();
+			String getDanmuIdSQL = """
+select danmu_id from danmu_info where bv = ? and senderMid = ? and showtime = ? and content = ? and posttime = ?;
+			""";
+			for (DanmuRecord danmuRecord : danmuRecords) {
+				stmt.setString(1, danmuRecord.getBv());
+				stmt.setLong(2, danmuRecord.getMid());
+				stmt.setFloat(3, danmuRecord.getTime());
+				stmt.setString(4, danmuRecord.getContent());
+				stmt.setTimestamp(5, danmuRecord.getPostTime());
+				stmt.addBatch();
+			}
+			ResultSet rs = stmt.executeQuery();
+			for (DanmuRecord danmuRecord : danmuRecords) {
+				rs.next();
+				danmuRecord.setId(rs.getLong(1));
+			}
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
 		}
 
 		// load user_follow
-}
+		String insertUserFollowSQL = "insert into user_follow (star_mid, fan_mid) values (?, ?);";
+		try (Connection conn = dataSource.getConnection();
+			PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+			for (UserRecord userRecord : userRecords) {
+				stmt.setLong(2, userRecord.getMid());
+				for (Long starMid : userRecord.getFollowing()) {
+					stmt.setLong(1, starMid);
+					stmt.addBatch();
+				}
+			}
+			stmt.executeBatch();
+		} catch (SQLException e) {
+			System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+		}
+
+		// TODO: load user_watch_video (not sure about the requirement)
+
+		// load user_coin_video
+		String insertUserCoinVideoSQL = "insert into user_coin_video (mid, bv) values (?, ?);";
+		try (Connection conn = dataSource.getConnection();
+			PreparedStatement stmt = conn.prepareStatement(insertUserCoinVideoSQL)) {
+			for (VideoRecord videoRecord : videoRecords) {
+				stmt.setString(2, videoRecord.getBv());
+				for (Long mid : videoRecord.getCoin()) {
+					stmt.setLong(1, mid);
+					stmt.addBatch();
+				}
+			}
+			stmt.executeBatch();
+		} catch (SQLException e) {
+			System.out.println("[ERROR] Fail to insert user_coin_video records, " + e.getMessage());
+		}
+
+		// load user_like_video
+		String insertUserLikeVideoSQL = "insert into user_like_video (mid, bv) values (?, ?);";
+		try (Connection conn = dataSource.getConnection();
+			PreparedStatement stmt = conn.prepareStatement(insertUserLikeVideoSQL)) {
+			for (VideoRecord videoRecord : videoRecords) {
+				stmt.setString(2, videoRecord.getBv());
+				for (Long mid : videoRecord.getLike()) {
+					stmt.setLong(1, mid);
+					stmt.addBatch();
+				}
+			}
+			stmt.executeBatch();
+		} catch (SQLException e) {
+			System.out.println("[ERROR] Fail to insert user_like_video records, " + e.getMessage());
+		}
+
+		// load user_fav_video
+		String insertUserFavVideoSQL = "insert into user_fav_video (mid, bv) values (?, ?);";
+		try (Connection conn = dataSource.getConnection();
+			PreparedStatement stmt = conn.prepareStatement(insertUserFavVideoSQL)) {
+			for (VideoRecord videoRecord : videoRecords) {
+				stmt.setString(2, videoRecord.getBv());
+				for (Long mid : videoRecord.getFavorite()) {
+					stmt.setLong(1, mid);
+					stmt.addBatch();
+				}
+			}
+			stmt.executeBatch();
+		} catch (SQLException e) {
+			System.out.println("[ERROR] Fail to insert user_fav_video records, " + e.getMessage());
+		}
+
+		// load user_like_danmu
+		String insertUserLikeDanmuSQL = "insert into user_like_danmu (danmu_id, mid) values (?, ?);";
+		try (Connection conn = dataSource.getConnection();
+			PreparedStatement stmt = conn.prepareStatement(insertUserLikeDanmuSQL)) {
+			for (DanmuRecord danmuRecord : danmuRecords) {
+				stmt.setLong(1, danmuRecord.getId());
+				for (Long mid : danmuRecord.getLikedBy()) {
+					stmt.setLong(2, mid);
+					stmt.addBatch();
+				}
+			}
+			stmt.executeBatch();
+		} catch (SQLException e) {
+			System.out.println("[ERROR] Fail to insert user_like_danmu records, " + e.getMessage());
+		}
+	}
 
 	/**
 	 * The following code is just a quick example of using jdbc datasource.
