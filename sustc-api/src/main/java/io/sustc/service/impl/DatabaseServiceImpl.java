@@ -15,8 +15,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.List;
 
 /**
@@ -245,7 +243,7 @@ insert into video_info (bv, title, ownMid, commitTime, revMid, reviewTime, publi
 				stmt.setLong(5, videoRecord.getReviewer());
 				stmt.setTimestamp(6, videoRecord.getReviewTime());
 				stmt.setTimestamp(7, videoRecord.getPublicTime());
-				stmt.setLong(8, videoRecord.getDuration());
+				stmt.setFloat(8, videoRecord.getDuration());
 				stmt.setString(9, videoRecord.getDescription());
 				stmt.addBatch();
 			}
@@ -269,11 +267,14 @@ insert into danmu_info (bv, senderMid, showtime, content, posttime)
 				stmt.setTimestamp(5, danmuRecord.getPostTime());
 				stmt.addBatch();
 			}
-			stmt.executeBatch();
-			stmt.clearBatch();
-			String getDanmuIdSQL = """
+		} catch (SQLException e) {
+			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
+		}
+		String getDanmuIdSQL = """
 select danmu_id from danmu_info where bv = ? and senderMid = ? and showtime = ? and content = ? and posttime = ?;
 			""";
+		try (Connection conn = dataSource.getConnection();
+		     PreparedStatement stmt = conn.prepareStatement(getDanmuIdSQL)) {
 			for (DanmuRecord danmuRecord : danmuRecords) {
 				stmt.setString(1, danmuRecord.getBv());
 				stmt.setLong(2, danmuRecord.getMid());
@@ -287,10 +288,10 @@ select danmu_id from danmu_info where bv = ? and senderMid = ? and showtime = ? 
 				rs.next();
 				danmuRecord.setId(rs.getLong(1));
 			}
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
 		}
-
+		catch (SQLException e) {
+			System.out.println("[ERROR] Fail to get danmu_id, " + e.getMessage());
+		}
 		// load user_follow
 		String insertUserFollowSQL = "insert into user_follow (star_mid, fan_mid) values (?, ?);";
 		try (Connection conn = dataSource.getConnection();

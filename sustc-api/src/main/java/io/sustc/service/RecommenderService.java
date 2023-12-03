@@ -38,7 +38,7 @@ public interface RecommenderService {
      * @param pageSize the page size, if there are less than {@code pageSize} videos, return all of them
      * @param pageNum  the page number, starts from 1
      * @return a list of video {@code bv}s, sorted by the recommendation score
-     * @implNote 
+     * @implNote
      * Though users can like/coin/favorite a video without watching it, the rates of these values should be clamped to 1.
      * If no one has watched this video, all the five scores shall be 0.
      * If the requested page is empty, return an empty list.
@@ -52,8 +52,9 @@ public interface RecommenderService {
 
     /**
      * Recommends videos for a user, restricted on their interests.
-     * The user's interests are defined as the videos that the both user's followers and his/her followees have watched,
+     * The user's interests are defined as the videos that the user's friend(s) have watched,
      * filter out the videos that the user has already watched.
+     * Friend(s) of current user is/are the one(s) who is/are both the current user' follower and followee at the same time.
      * Sort the videos by:
      * <ol>
      *   <li>The number of friends who have watched the video</li>
