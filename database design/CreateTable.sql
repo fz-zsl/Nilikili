@@ -9,7 +9,7 @@ drop table if exists video_info;
 drop table if exists user_info;
 
 create table user_info (
-    mid bigint not null,
+    mid bigserial not null,
     name text not null,
     sex varchar(10),
     birthday date,
@@ -19,7 +19,7 @@ create table user_info (
     pwd char(256), -- encrypted by SHA256
     qqid varchar(13),
     wxid varchar(50),
-    coin numeric(10,2),
+    coin int default 0,
     active boolean default true,
     constraint mid_pk primary key (mid)
 );

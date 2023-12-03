@@ -9,8 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -44,36 +42,6 @@ public class DatabaseServiceImpl implements DatabaseService {
 	public List<Integer> getGroupMembers() {
 		return List.of(12212232);
 	}
-
-	static class EncryptSHA256 {
-		public static String encrypt(String str) {
-			int chunkSize = 64;
-			String result = "";
-			for (int i = 0; i < str.length(); i += chunkSize) {
-				String chunk = str.substring(i, Math.min(str.length(), i + chunkSize));
-				result += hastToString(hashString(chunk));
-			}
-			return result;
-		}
-
-		private static String hastToString(byte[] hash) {
-			String result = "";
-			for (byte b : hash) {
-				result += Integer.toString((b & 0xff) + 0x100, 16).substring(1);
-			}
-			return result;
-		}
-
-		private static byte[] hashString(String str) {
-			try {
-				MessageDigest digest = MessageDigest.getInstance("SHA-256");
-				return digest.digest(str.getBytes(StandardCharsets.UTF_8));
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-		}
-	}
-
 	/**
 	 * Imports data to an empty database.
 	 * Invalid data will not be provided.
@@ -87,7 +55,7 @@ public class DatabaseServiceImpl implements DatabaseService {
 		List<DanmuRecord> danmuRecords,
 		List<UserRecord> userRecords,
 		List<VideoRecord> videoRecords
-	) {
+	) { // TODO: ask the default value of coin and level
 		String createSQL = """
 drop table if exists user_like_danmu;
 drop table if exists user_fav_video;
@@ -100,7 +68,7 @@ drop table if exists video_info;
 drop table if exists user_info;
 
 create table user_info (
-    mid bigint not null,
+    mid bigserial not null,
     name text not null,
     sex varchar(10),
     birthday date,
@@ -110,7 +78,7 @@ create table user_info (
     pwd char(256), -- encrypted by SHA256
     qqid varchar(13),
     wxid varchar(50),
-    coin numeric(10,2),
+    coin int default 0,
     active boolean default true,
     constraint mid_pk primary key (mid)
 );
@@ -204,7 +172,17 @@ insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqi
 			for (UserRecord userRecord : userRecords) {
 				stmt.setLong(1, userRecord.getMid());
 				stmt.setString(2, userRecord.getName());
-				stmt.setString(3, userRecord.getSex());
+				String sexString = userRecord.getSex();
+				if (sexString.equals("M") || sexString.equals("男") || sexString.equals("♂")) {
+					sexString = "MALE";
+				}
+				else if (sexString.equals("F") || sexString.equals("女") || sexString.equals("♀")) {
+					sexString = "FEMALE";
+				}
+				else {
+					sexString = "UNKNOWN";
+				}
+				stmt.setString(3, sexString);
 				if (userRecord.getBirthday() != null) {
 					String birthday = userRecord.getBirthday();
 					int month = Integer.parseInt(birthday.substring(0, birthday.indexOf('月')));
