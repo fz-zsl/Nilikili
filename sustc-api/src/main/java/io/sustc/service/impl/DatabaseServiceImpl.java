@@ -76,7 +76,7 @@ create table user_info (
     sign text,
     identity varchar(10) not null,
     pwd char(256), -- encrypted by SHA256
-    qqid varchar(13),
+    qqid varchar(20),
     wxid varchar(50),
     coin int default 0,
     active boolean default true,
@@ -91,9 +91,10 @@ create table video_info (
     revMid bigint, -- reviewer's mid
     reviewTime timestamp,
     publicTime timestamp,
-    duration bigint, -- in seconds
+    duration float8, -- in seconds
     descr text, -- description
     active boolean default true,
+    -- only means not deleted, may not be visible
     constraint bv_pk primary key (bv)
 );
 
@@ -121,7 +122,7 @@ create table user_follow (
 create table user_watch_video (
     mid bigint not null,
     bv varchar(15) not null,
-    lastpos bigint not null, -- last watch time stamp in seconds
+    lastpos float8 not null, -- last watch time stamp in seconds
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint bv_fk foreign key (bv) references video_info(bv)
 );
@@ -154,6 +155,19 @@ create table user_like_danmu (
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id)
 );
+
+create or replace function generate_unique_bv() returns text as $$
+declare 
+    new_uuid text;
+begin
+    loop
+        new_uuid := substring(gen_random_uuid()::text FROM 1 FOR 10);
+        if not exists (select 1 from video_info where bv = new_uuid) then
+            return 'BV' || new_uuid;
+        end if;
+    end loop;
+end;
+$$ language plpgsql;
 		""";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(createSQL)) {

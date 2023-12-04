@@ -213,9 +213,43 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 			}
 		}
 		// account deletion in SQL
-		String deleteSQL = "update user_info set active = false where mid = ?";
+		String deleteAccountSQL = "update user_info set active = false where mid = ?";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(deleteSQL)) {
+		     PreparedStatement stmt = conn.prepareStatement(deleteAccountSQL)) {
+			stmt.setLong(1, mid);
+			stmt.executeUpdate();
+		} catch (SQLException e) {
+			log.error("SQL error: {}", e.getMessage());
+			return false;
+		}
+		// cascade delete videos
+		String deleteVideoSQL = "update video_info set active = false where ownMid = ?";
+		try (Connection conn = dataSource.getConnection();
+		     PreparedStatement stmt = conn.prepareStatement(deleteVideoSQL)) {
+			stmt.setLong(1, mid);
+			stmt.executeUpdate();
+		} catch (SQLException e) {
+			log.error("SQL error: {}", e.getMessage());
+			return false;
+		}
+		// cascade delete danmu sent by the user
+		String deleteDanmuSQL = "update danmu_info set active = false where senderMid = ?";
+		try (Connection conn = dataSource.getConnection();
+		     PreparedStatement stmt = conn.prepareStatement(deleteDanmuSQL)) {
+			stmt.setLong(1, mid);
+			stmt.executeUpdate();
+		} catch (SQLException e) {
+			log.error("SQL error: {}", e.getMessage());
+			return false;
+		}
+		// cascade delete danmu on user's video
+		deleteDanmuSQL = """
+update danmu_info set active = false where bv in (
+	select bv from video_info where ownMid = ?
+)
+		""";
+		try (Connection conn = dataSource.getConnection();
+		     PreparedStatement stmt = conn.prepareStatement(deleteDanmuSQL)) {
 			stmt.setLong(1, mid);
 			stmt.executeUpdate();
 		} catch (SQLException e) {
@@ -371,7 +405,7 @@ select fan_mid
 		String getWatchedSQL = """
 select bv
 	from user_watch_video join video_info on user_watch_video.bv = video_info.bv
-	where mid = ? and active = true
+	where mid = ? and revMid is not null and publicTime <= now() and active = true
 		""";
 		ArrayList<String> watchedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -391,7 +425,7 @@ select bv
 		String getLikedSQL = """
 select bv
 	from user_like_video join video_info on user_like_video.bv = video_info.bv
-	where mid = ? and active = true
+	where mid = ? and revMid is not null and publicTime <= now() and active = true
 		""";
 		ArrayList<String> likedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -411,7 +445,7 @@ select bv
 		String getCollectedSQL = """
 select bv
 	from user_fav_video join video_info on user_fav_video.bv = video_info.bv
-	where mid = ? and active = true
+	where mid = ? and revMid is not null and publicTime <= now() and active = true
 		""";
 		ArrayList<String> collectedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -428,7 +462,10 @@ select bv
 		}
 		String [] collected = collectedList.toArray(new String[0]);
 		// posted
-		String getPostedSQL = "select bv from video_info where mid = ? and active = true";
+		String getPostedSQL = """
+select bv from video_info
+	where mid = ? and revMid is not null and publicTime <= now() and active = true
+		"""; // TODO: shall we display invisible videos?
 		ArrayList<String> postedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getPostedSQL)) {

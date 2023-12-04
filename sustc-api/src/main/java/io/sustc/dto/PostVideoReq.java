@@ -26,7 +26,7 @@ public class PostVideoReq {
     /**
      * The video's duration (in seconds).
      */
-    private long duration;
+    private float duration;
 
     /**
      * The video's public time.
