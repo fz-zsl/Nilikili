@@ -27,19 +27,19 @@ public interface UserService {
 	 * Deletes a user.
 	 *
 	 * @param auth indicates the current user
-	 * @param mid  the user to be deleted
+	 * @param mid  the user's {@code mid} to be deleted
 	 * @return operation success or not
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code mid} is invalid (<= 0)</li>
+	 *   <li>{@code mid} is invalid (<= 0 or do not exist)</li>
 	 *   <li>the {@code auth} is invalid
-	 *	 <ul>
-	 *	   <li>both {@code qq} and {@code wechat} are non-empty while they do not correspond to same user</li>
-	 *	   <li>{@code mid} is invalid while {@code qq} and {@code wechat} are both invalid (empty or not found)</li>
-	 *	 </ul>
+	 *     <ul>
+	 *       <li>both {@code qq} and {@code wechat} are non-empty while they do not correspond to same user</li>
+	 *       <li>{@code mid} is invalid while {@code qq} and {@code wechat} are both invalid (empty or not found)</li>
+	 *     </ul>
 	 *   </li>
 	 *   <li>the current user is a regular user while the {@code mid} is not his/hers</li>
-	 *   <li>the current user is a super user while the {@code mid} is not his/hers</li>
+	 *   <li>the current user is a super user while the {@code mid} is neither a regular user's {@code mid} nor his/hers</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
 	 */
@@ -49,9 +49,9 @@ public interface UserService {
 	 * Follow the user with {@code mid}.
 	 * If that user has already been followed, unfollow the user.
 	 *
-	 * @param auth		the authentication information of the follower
+	 * @param auth        the authentication information of the follower
 	 * @param followeeMid the user who will be followed
-	 * @return operation success or not
+	 * @return the follow state after this operation
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
@@ -65,7 +65,7 @@ public interface UserService {
 	 * Gets the required information (in DTO) of a user.
 	 *
 	 * @param mid the user to be queried
-	 * @return {@code mid}s person Information
+	 * @return the personal information of given {@code mid}
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code mid} is invalid (<= 0 or not found)</li>

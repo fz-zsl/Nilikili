@@ -134,19 +134,19 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 	 * Deletes a user.
 	 *
 	 * @param auth indicates the current user
-	 * @param mid  the user to be deleted
+	 * @param mid  the user's {@code mid} to be deleted
 	 * @return operation success or not
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code mid} is invalid (<= 0)</li>
+	 *   <li>{@code mid} is invalid (<= 0 or do not exist)</li>
 	 *   <li>the {@code auth} is invalid
-	 *	 <ul>
-	 *	   <li>both {@code qq} and {@code wechat} are non-empty while they do not correspond to same user</li>
-	 *	   <li>{@code mid} is invalid while {@code qq} and {@code wechat} are both invalid (empty or not found)</li>
-	 *	 </ul>
+	 *     <ul>
+	 *       <li>both {@code qq} and {@code wechat} are non-empty while they do not correspond to same user</li>
+	 *       <li>{@code mid} is invalid while {@code qq} and {@code wechat} are both invalid (empty or not found)</li>
+	 *     </ul>
 	 *   </li>
 	 *   <li>the current user is a regular user while the {@code mid} is not his/hers</li>
-	 *   <li>the current user is a super user while the {@code mid} is not his/hers</li>
+	 *   <li>the current user is a super user while the {@code mid} is neither a regular user's {@code mid} nor his/hers</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
 	 */
@@ -194,9 +194,23 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 			log.error("A user can only delete his/her own account.");
 			return false;
 		}
-		if (auth_Identity.equals("SUPERUSER") && auth_mid == mid) {
-			log.error("A super user cannot delete his/her own account.");
-			return false;
+		if (auth_Identity.equals("SUPERUSER")) {
+			String checkDeletedIdentity = "select identity from user_info where mid = ? and active = true";
+			String deletedIdentity;
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(checkDeletedIdentity)) {
+				stmt.setLong(1, mid);
+				try (ResultSet rs = stmt.executeQuery()) {
+					deletedIdentity = rs.getString("identity");
+				}
+			} catch (SQLException e) {
+				log.error("SQL error: {}", e.getMessage());
+				return false;
+			}
+			if (deletedIdentity.equals("SUPERUSER") && auth_mid != mid) {
+				log.error("A super user cannot delete a superuser other than himself/herself.");
+				return false;
+			}
 		}
 		// account deletion in SQL
 		String deleteSQL = "update user_info set active = false where mid = ?";
@@ -270,7 +284,7 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 	 * Gets the required information (in DTO) of a user.
 	 *
 	 * @param mid the user to be queried
-	 * @return {@code mid}s person Information
+	 * @return the personal information of given {@code mid}
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code mid} is invalid (<= 0 or not found)</li>
