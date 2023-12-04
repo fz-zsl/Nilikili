@@ -43,7 +43,7 @@ create table danmu_info (
     danmu_id bigserial not null,
     bv varchar(15) not null,
     senderMid bigint not null,
-    showtime float8 not null,
+    showTime float8 not null,
     -- the display time from the start of video (in seconds)
     content text,
     postTime timestamp,

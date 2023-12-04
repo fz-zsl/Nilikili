@@ -111,6 +111,10 @@ insert into video_info (bv, title, ownMid, commitTime, publicTime, duration, des
 			return false;
 		}
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return false;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
@@ -209,6 +213,10 @@ insert into video_info (bv, title, ownMid, commitTime, publicTime, duration, des
 			return false;
 		}
 		// handle invalid bv and get owner's mid
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return false;
+		}
 		String checkBvSQL = "select ownMid from video_info where bv = ? and active = true";
 		long ownerMid;
 		try (Connection conn = dataSource.getConnection();
@@ -429,6 +437,10 @@ select bv from video_info
 	@Override
 	public double getAverageViewRate(String bv) {
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return -1;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
@@ -496,6 +508,10 @@ select bv from video_info
 	public Set<Integer> getHotspot(String bv) {
 		Set<Integer> result = new HashSet<>();
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return result;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
@@ -567,6 +583,10 @@ select chunkId, maxx from (
 			return false;
 		}
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return false;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
@@ -679,6 +699,10 @@ update video_info
 			return false;
 		}
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return false;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
@@ -708,8 +732,9 @@ update video_info
 			log.error("SQL error: {}", e.getMessage());
 			return false;
 		}
+		long ownMid;
 		String getValidBvSQL = """
-select bv from video_info
+select bv, ownMid from video_info
 	where bv = ? and ownMid <> ? and active = true and (
 		revMid is not null and publicTime <= now() -- visible to all
 		or ? = 'SUPERUSER')  -- visible to super user only
@@ -724,6 +749,7 @@ select bv from video_info
 					log.error("Video not found or insufficient permission");
 					return false;
 				}
+				ownMid = rs.getLong(2);
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
@@ -785,7 +811,7 @@ begin transaction;
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(donateCoinSQL)) {
 			stmt.setLong(1, auth_mid);
-			stmt.setLong(2, ownerMid);
+			stmt.setLong(2, ownMid);
 			stmt.setLong(3, auth_mid);
 			stmt.setString(4, bv);
 			stmt.setLong(5, auth_mid);
@@ -823,6 +849,10 @@ begin transaction;
 			return false;
 		}
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return false;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
@@ -930,6 +960,10 @@ select bv from video_info
 			return false;
 		}
 		// handle invalid bv
+		if (bv == null || bv.isEmpty()) {
+			log.error("Video not found or insufficient permission");
+			return false;
+		}
 		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {

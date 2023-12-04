@@ -464,7 +464,7 @@ select bv
 		// posted
 		String getPostedSQL = """
 select bv from video_info
-	where mid = ? and revMid is not null and publicTime <= now() and active = true
+	where ownMid = ? and revMid is not null and publicTime <= now() and active = true
 		"""; // TODO: shall we display invisible videos?
 		ArrayList<String> postedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
