@@ -314,7 +314,11 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 			return null;
 		}
 		// following
-		String getFollowingSQL = "select star_mid from user_follow where fan_mid = ?";
+		String getFollowingSQL = """
+select star_mid
+	from user_follow join user_info on user_follow.star_mid = user_info.mid
+	where fan_mid = ? and active = true
+		""";
 		ArrayList<Long> followingList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getFollowingSQL)) {
@@ -330,7 +334,11 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 		}
 		Long[] following = followingList.toArray(new Long[0]);
 		// follower
-		String getFollowerSQL = "select fan_mid from user_follow where star_mid = ?";
+		String getFollowerSQL = """
+select fan_mid
+	from user_follow join user_info on user_follow.fan_mid = user_info.mid
+	where star_mid = ? and active = true
+		""";
 		ArrayList<Long> followerList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getFollowerSQL)) {
@@ -346,7 +354,11 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 		}
 		Long [] follower = followerList.toArray(new Long[0]);
 		// watched
-		String getWatchedSQL = "select bv from user_watch_video where mid = ?";
+		String getWatchedSQL = """
+select bv
+	from user_watch_video join video_info on user_watch_video.bv = video_info.bv
+	where mid = ? and active = true
+		""";
 		ArrayList<String> watchedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getWatchedSQL)) {
@@ -362,7 +374,11 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 		}
 		String [] watched = watchedList.toArray(new String[0]);
 		// liked
-		String getLikedSQL = "select bv from user_like_video where mid = ?";
+		String getLikedSQL = """
+select bv
+	from user_like_video join video_info on user_like_video.bv = video_info.bv
+	where mid = ? and active = true
+		""";
 		ArrayList<String> likedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getLikedSQL)) {
@@ -378,7 +394,11 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 		}
 		String [] liked = likedList.toArray(new String[0]);
 		// collected
-		String getCollectedSQL = "select bv from user_fav_video where mid = ?";
+		String getCollectedSQL = """
+select bv
+	from user_fav_video join video_info on user_fav_video.bv = video_info.bv
+	where mid = ? and active = true
+		""";
 		ArrayList<String> collectedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getCollectedSQL)) {
@@ -394,7 +414,7 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 		}
 		String [] collected = collectedList.toArray(new String[0]);
 		// posted
-		String getPostedSQL = "select bv from video_info where mid = ?";
+		String getPostedSQL = "select bv from video_info where mid = ? and active = true";
 		ArrayList<String> postedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getPostedSQL)) {
