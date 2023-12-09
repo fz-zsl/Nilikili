@@ -115,6 +115,7 @@ create table danmu_info (
 create table user_follow (
     star_mid bigint not null,
     fan_mid bigint not null,
+    constraint user_follow_pk primary key (star_mid, fan_mid),
     constraint star_fk foreign key (star_mid) references user_info(mid),
     constraint fan_fk foreign key (fan_mid) references user_info(mid)
 );
@@ -123,6 +124,7 @@ create table user_watch_video (
     mid bigint not null,
     bv varchar(15) not null,
     lastpos float8 not null, -- last watch time stamp in seconds
+    constraint user_watch_video_pk primary key (mid, bv),
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint bv_fk foreign key (bv) references video_info(bv)
 );
@@ -131,6 +133,7 @@ create table user_coin_video (
     mid bigint not null,
     bv varchar(25) not null,
     -- given int, -- the number of coins given by the user
+    constraint user_coin_video_pk primary key (mid, bv),
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint bv_fk foreign key (bv) references video_info(bv)
 );
@@ -138,6 +141,7 @@ create table user_coin_video (
 create table user_like_video (
     mid bigint not null,
     bv varchar(15) not null,
+    constraint user_like_video_pk primary key (mid, bv),
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint bv_fk foreign key (bv) references video_info(bv)
 );
@@ -145,6 +149,7 @@ create table user_like_video (
 create table user_fav_video (
     mid bigint not null,
     bv varchar(15) not null,
+    constraint user_fav_video_pk primary key (mid, bv),
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint bv_fk foreign key (bv) references video_info(bv)
 );
@@ -152,12 +157,13 @@ create table user_fav_video (
 create table user_like_danmu (
     danmu_id bigint not null,
     mid bigint not null,
+    constraint user_like_danmu_pk primary key (danmu_id, mid),
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id)
 );
 
 create or replace function generate_unique_bv() returns text as $$
-declare 
+declare
     new_uuid text;
 begin
     loop

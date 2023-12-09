@@ -22,7 +22,7 @@ template to start your work.
   option, which provides the platform-independent sorting result.
   > ```sql
   > CREATE DATABASE sustc WITH ENCODING = 'UTF8' LC_COLLATE = 'C' TEMPLATE = template0;
-  > ```
+  >```
 
 ## Getting started
 
@@ -34,6 +34,19 @@ or [download a zip copy](https://github.com/hezean/sustc/archive/refs/heads/main
 
 Consider _watching_ the template repository to track discussions/issues,
 and receive notifications when we update the template.
+
+> [!NOTE]  
+> Please check the updates in the code framework regularly.
+> To apply the changes to your repository, you can use the following commands:
+> ```shell
+> # this command is only required for the first time
+> git remote add upstream https://github.com/hezean/sustc.git  # or `git@github.com:hezean/sustc.git` for git protocol
+> 
+> git fetch upstream
+> # better to commit your changes before merging
+> git merge upstream/main --allow-unrelated-histories
+> # then resolve the conflicts (if any) and commit the changes
+> ```
 
 ### 2. Understand the project structure
 
