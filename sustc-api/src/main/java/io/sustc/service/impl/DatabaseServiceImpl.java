@@ -205,9 +205,14 @@ insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqi
 				stmt.setString(3, sexString);
 				if (userRecord.getBirthday() != null) {
 					String birthday = userRecord.getBirthday();
-					int month = Integer.parseInt(birthday.substring(0, birthday.indexOf('月')));
-					int day = Integer.parseInt(birthday.substring(birthday.indexOf('月') + 1, birthday.indexOf('日')));
-					stmt.setString(4, String.format("1970-%02d-%02d", month, day));
+					if (birthday.indexOf('月') == -1 || birthday.indexOf('日') == -1) {
+						stmt.setString(4, null);
+					}
+					else {
+						int month = Integer.parseInt(birthday.substring(0, birthday.indexOf('月')));
+						int day = Integer.parseInt(birthday.substring(birthday.indexOf('月') + 1, birthday.indexOf('日')));
+						stmt.setString(4, String.format("1970-%02d-%02d", month, day));
+					}
 				}
 				else {
 					stmt.setString(4, null);
@@ -265,24 +270,20 @@ insert into danmu_info (bv, senderMid, showtime, content, posttime)
 				stmt.setTimestamp(5, danmuRecord.getPostTime());
 				stmt.addBatch();
 			}
+			stmt.executeBatch();
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
 		}
 		String getDanmuIdSQL = """
-select danmu_id from danmu_info where bv = ? and senderMid = ? and showtime = ? and content = ? and posttime = ?;
+select danmu_id from danmu_info where bv = ? and senderMid = ? and posttime = ?;
 			""";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getDanmuIdSQL)) {
 			for (DanmuRecord danmuRecord : danmuRecords) {
 				stmt.setString(1, danmuRecord.getBv());
 				stmt.setLong(2, danmuRecord.getMid());
-				stmt.setFloat(3, danmuRecord.getTime());
-				stmt.setString(4, danmuRecord.getContent());
-				stmt.setTimestamp(5, danmuRecord.getPostTime());
-				stmt.addBatch();
-			}
-			ResultSet rs = stmt.executeQuery();
-			for (DanmuRecord danmuRecord : danmuRecords) {
+				stmt.setTimestamp(3, danmuRecord.getPostTime());
+				ResultSet rs = stmt.executeQuery();
 				rs.next();
 				danmuRecord.setId(rs.getLong(1));
 			}
@@ -290,6 +291,7 @@ select danmu_id from danmu_info where bv = ? and senderMid = ? and showtime = ? 
 		catch (SQLException e) {
 			System.out.println("[ERROR] Fail to get danmu_id, " + e.getMessage());
 		}
+
 		// load user_follow
 		String insertUserFollowSQL = "insert into user_follow (star_mid, fan_mid) values (?, ?);";
 		try (Connection conn = dataSource.getConnection();
