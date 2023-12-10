@@ -215,11 +215,10 @@ select fan_mid from user_follow
 			return null;
 		}
 		Long [] follower = followerList.toArray(new Long[0]);
-		// TODO: watched
+		// watched
 		String getWatchedSQL = """
-select bv
-	from user_watch_video join video_info on user_watch_video.bv = video_info.bv
-	where mid = ? and revMid is not null and publicTime <= now() and active = true
+(select bv from user_watch_video where mid = ?)
+intersect (select bv from video_active)
 		""";
 		ArrayList<String> watchedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -235,11 +234,10 @@ select bv
 			return null;
 		}
 		String [] watched = watchedList.toArray(new String[0]);
-		// TODO: liked
+		// liked
 		String getLikedSQL = """
-select bv
-	from user_like_video join video_info on user_like_video.bv = video_info.bv
-	where mid = ? and revMid is not null and publicTime <= now() and active = true
+(select bv from user_like_video where mid = ?)
+intersect (select bv from video_active)
 		""";
 		ArrayList<String> likedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -255,11 +253,10 @@ select bv
 			return null;
 		}
 		String [] liked = likedList.toArray(new String[0]);
-		// TODO: collected
+		// collected
 		String getCollectedSQL = """
-select bv
-	from user_fav_video join video_info on user_fav_video.bv = video_info.bv
-	where mid = ? and revMid is not null and publicTime <= now() and active = true
+(select bv from user_fav_video where mid = ?)
+intersect (select bv from video_active)
 		""";
 		ArrayList<String> collectedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -277,9 +274,9 @@ select bv
 		String [] collected = collectedList.toArray(new String[0]);
 		// posted
 		String getPostedSQL = """
-select bv from video_info
-	where ownMid = ? and revMid is not null and publicTime <= now() and active = true
-		"""; // TODO: shall we display invisible videos?
+(select bv from video_info where ownMid = ?)
+intersect (select bv from video_active)
+		""";
 		ArrayList<String> postedList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getPostedSQL)) {
