@@ -94,7 +94,7 @@ create table video_info (
     duration float8, -- in seconds
     descr text, -- description
     active boolean default true,
-    -- only means not deleted, may not be visible
+        -- only means not deleted, may not be visible
     constraint bv_pk primary key (bv)
 );
 
@@ -132,7 +132,6 @@ create table user_watch_video (
 create table user_coin_video (
     mid bigint not null,
     bv varchar(25) not null,
-    -- given int, -- the number of coins given by the user
     constraint user_coin_video_pk primary key (mid, bv),
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint bv_fk foreign key (bv) references video_info(bv)
@@ -161,6 +160,19 @@ create table user_like_danmu (
     constraint mid_fk foreign key (mid) references user_info(mid),
     constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id)
 );
+
+create or replace view user_active as
+	select * from user_info where active = true;
+
+create or replace view video_active as
+	select * from video_info where active = true and revMid is not null
+		and (publicTime is null or publicTime <= now());
+	
+create or replace view video_active_super as
+	select * from video_info where active = true;
+
+create or replace view danmu_active as
+	select * from danmu_info where active = true;
 
 create or replace function generate_unique_bv() returns text as $$
 declare
