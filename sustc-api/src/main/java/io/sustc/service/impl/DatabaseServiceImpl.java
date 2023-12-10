@@ -269,39 +269,25 @@ insert into video_info (bv, title, ownMid, commitTime, revMid, reviewTime, publi
 
 		// load danmu_info
 		String insertDanmuInfoSQL = """
-insert into danmu_info (bv, senderMid, showtime, content, posttime)
-	values (?, ?, ?, ?, ?);
+insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
+	values (?, ?, ?, ?, ?, ?);
 	""";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertDanmuInfoSQL)) {
+			long danmuCnt = 0;
 			for (DanmuRecord danmuRecord : danmuRecords) {
-				stmt.setString(1, danmuRecord.getBv());
-				stmt.setLong(2, danmuRecord.getMid());
-				stmt.setFloat(3, danmuRecord.getTime());
-				stmt.setString(4, danmuRecord.getContent());
-				stmt.setTimestamp(5, danmuRecord.getPostTime());
+				danmuRecord.setId(++danmuCnt);
+				stmt.setLong(1, danmuCnt);
+				stmt.setString(2, danmuRecord.getBv());
+				stmt.setLong(3, danmuRecord.getMid());
+				stmt.setFloat(4, danmuRecord.getTime());
+				stmt.setString(5, danmuRecord.getContent());
+				stmt.setTimestamp(6, danmuRecord.getPostTime());
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
-		}
-		String getDanmuIdSQL = """
-select danmu_id from danmu_info where bv = ? and senderMid = ? and posttime = ?;
-			""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getDanmuIdSQL)) {
-			for (DanmuRecord danmuRecord : danmuRecords) {
-				stmt.setString(1, danmuRecord.getBv());
-				stmt.setLong(2, danmuRecord.getMid());
-				stmt.setTimestamp(3, danmuRecord.getPostTime());
-				ResultSet rs = stmt.executeQuery();
-				rs.next();
-				danmuRecord.setId(rs.getLong(1));
-			}
-		}
-		catch (SQLException e) {
-			System.out.println("[ERROR] Fail to get danmu_id, " + e.getMessage());
 		}
 
 		// load user_follow
@@ -320,7 +306,7 @@ select danmu_id from danmu_info where bv = ? and senderMid = ? and posttime = ?;
 			System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
 		}
 
-		// TODO: load user_watch_video (not sure about the requirement)
+		// load user_watch_video: data not provided
 
 		// load user_coin_video
 		String insertUserCoinVideoSQL = "insert into user_coin_video (mid, bv) values (?, ?);";
