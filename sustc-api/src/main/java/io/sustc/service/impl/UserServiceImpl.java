@@ -39,91 +39,19 @@ public class UserServiceImpl implements UserService {
 	 */
 	@Override
 	public long register(RegisterUserReq req) {
-		// handle corner cases
-		if (req.getName() == null || req.getName().isEmpty()) {
-			log.error("Name is null or empty.");
-			return -1;
-		}
-		if (req.getPassword() == null || req.getPassword().isEmpty()) {
-			log.error("Password is null or empty.");
-			return -1;
-		}
-		if (req.getSex() == null) {
-			log.error("Sex is null.");
-			return -1;
-		}
-		int month, day;
-		if (req.getBirthday() != null && !req.getBirthday().isEmpty()) {
-			String[] birthday = req.getBirthday().split("月");
-			if (birthday.length != 2) {
-				log.error("Birthday is invalid.");
-				return -1;
-			}
-			try {
-				month = Integer.parseInt(birthday[0]);
-				day = Integer.parseInt(birthday[1].substring(0, birthday[1].length() - 1));
-			} catch (NumberFormatException e) {
-				log.error("Birthday is invalid.");
-				return -1;
-			}
-			int [] days = {31,29,31,30,31,30,31,31,30,31,30,31};
-			if (month < 1 || month > 12 || day < 1 || day > days[month]) {
-				log.error("Birthday is invalid.");
-				return -1;
-			}
-		}
-		// duplicate check (name, qq, WeChat)
-		String dupCheckSQL = "select count(*) from user_info where name = ? or qqid = ? or wxid = ?";
+		String userRegisterSQL = "select user_reg(?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(dupCheckSQL)) {
-			stmt.setString(1, req.getName());
-			stmt.setString(2, req.getQq());
-			stmt.setString(3, req.getWechat());
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) != 0) {
-					log.error("Duplicate name, qq or wechat.");
-					return -1;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return -1;
-		}
-		// user registration in SQL
-		String registrationSQL = """
-insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
-	values (?, ?, to_date(?, 'YYYY-MM-DD'), ?, ?, ?, ?, ?);
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(registrationSQL)) {
+		     PreparedStatement stmt = conn.prepareStatement(userRegisterSQL)) {
 			stmt.setString(1, req.getName());
 			stmt.setString(2, req.getSex().toString());
 			stmt.setString(3, req.getBirthday());
 			stmt.setString(4, req.getSign());
-			stmt.setString(5, "USER");
-			stmt.setString(6, EncryptSHA256.encrypt(req.getPassword()));
-			stmt.setString(7, req.getQq());
-			stmt.setString(8, req.getWechat());
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return -1;
-		}
-		// get mid
-		String getMidSQL = "select mid from user_info where name = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getMidSQL)) {
-			stmt.setString(1, req.getName());
-			try (ResultSet rs = stmt.executeQuery()) {
-				if (rs.next()) {
-					return rs.getLong("mid");
-				}
-				else {
-					log.error("User not found.");
-					return -1;
-				}
-			}
+			stmt.setString(5, req.getPassword());
+			stmt.setString(6, req.getQq());
+			stmt.setString(7, req.getWechat());
+			ResultSet rs = stmt.executeQuery();
+			rs.next();
+			return rs.getLong(1);
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return -1;
@@ -152,111 +80,21 @@ insert into user_info (name, sex, birthday, sign, identity, pwd, qqid, wxid)
 	 */
 	@Override
 	public boolean deleteAccount(AuthInfo auth, long mid) {
-		// handle invalid mid
-		if (mid <= 0) {
-			log.error("Invalid mid.");
-			return false;
-		}
-		String getMidSQL = "select count(*) as cnt from user_info where mid = ? and active = true";
+		String userDeleteSQL = "select user_del(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getMidSQL)) {
-			stmt.setLong(1, mid);
+		     PreparedStatement stmt = conn.prepareStatement(userDeleteSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getQq());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setLong(5, mid);
 			ResultSet rs = stmt.executeQuery();
 			rs.next();
-			if (rs.getInt("cnt") == 0) {
-				log.error("User not found.");
-				return false;
-			}
+			return rs.getBoolean(1);
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
 		}
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Invalid auth.");
-			return false;
-		}
-		// identity check
-		String getIdentitySQL = "select identity from user_info where mid = ? and active = true";
-		String auth_Identity;
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getIdentitySQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				auth_Identity = rs.getString("identity");
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		if (auth_Identity.equals("USER") && auth_mid != mid) {
-			log.error("A user can only delete his/her own account.");
-			return false;
-		}
-		if (auth_Identity.equals("SUPERUSER")) {
-			String checkDeletedIdentity = "select identity from user_info where mid = ? and active = true";
-			String deletedIdentity;
-			try (Connection conn = dataSource.getConnection();
-			     PreparedStatement stmt = conn.prepareStatement(checkDeletedIdentity)) {
-				stmt.setLong(1, mid);
-				try (ResultSet rs = stmt.executeQuery()) {
-					deletedIdentity = rs.getString("identity");
-				}
-			} catch (SQLException e) {
-				log.error("SQL error: {}", e.getMessage());
-				return false;
-			}
-			if (deletedIdentity.equals("SUPERUSER") && auth_mid != mid) {
-				log.error("A super user cannot delete a superuser other than himself/herself.");
-				return false;
-			}
-		}
-		// account deletion in SQL
-		String deleteAccountSQL = "update user_info set active = false where mid = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(deleteAccountSQL)) {
-			stmt.setLong(1, mid);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// cascade delete videos
-		String deleteVideoSQL = "update video_info set active = false where ownMid = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(deleteVideoSQL)) {
-			stmt.setLong(1, mid);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// cascade delete danmu sent by the user
-		String deleteDanmuSQL = "update danmu_info set active = false where senderMid = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(deleteDanmuSQL)) {
-			stmt.setLong(1, mid);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// cascade delete danmu on user's video
-		deleteDanmuSQL = """
-update danmu_info set active = false where bv in (
-	select bv from video_info where ownMid = ?
-)
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(deleteDanmuSQL)) {
-			stmt.setLong(1, mid);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		return true;
 	}
 
 		/**
@@ -275,43 +113,21 @@ update danmu_info set active = false where bv in (
 	 */
 	@Override
 	public boolean follow(AuthInfo auth, long followeeMid) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Invalid auth.");
-			return false;
-		}
-		// handle invalid followeeMid
-		if (followeeMid <= 0) {
-			log.error("Invalid followeeMid.");
-			return false;
-		}
-		String getMidSQL = "select count(*) as cnt from user_info where mid = ? and active = true";
+		String userDeleteSQL = "select add_follow(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getMidSQL)) {
-			stmt.setLong(1, followeeMid);
+		     PreparedStatement stmt = conn.prepareStatement(userDeleteSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getQq());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setLong(5, followeeMid);
 			ResultSet rs = stmt.executeQuery();
 			rs.next();
-			if (rs.getInt("cnt") == 0) {
-				log.error("Followee not found.");
-				return false;
-			}
+			return rs.getBoolean(1);
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
 		}
-		// follow/unfollow in SQL
-		String followSQL = "insert into user_follow (star_mid, fan_mid) values (?, ?)";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(followSQL)) {
-			stmt.setLong(1, followeeMid);
-			stmt.setLong(2, auth_mid);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		return true;
 	}
 
 	/**
@@ -332,7 +148,7 @@ update danmu_info set active = false where bv in (
 			log.error("Invalid mid.");
 			return null;
 		}
-		String getMidSQL = "select count(*) from user_info where mid = ? and active = true";
+		String getMidSQL = "select count(*) from user_active where mid = ?";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getMidSQL)) {
 			stmt.setLong(1, mid);
@@ -348,7 +164,7 @@ update danmu_info set active = false where bv in (
 		}
 		// get user info in SQL
 		// coin
-		String getCoinSQL = "select coin from user_info where mid = ?";
+		String getCoinSQL = "select coin from user_active where mid = ?";
 		int coin;
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(getCoinSQL)) {
@@ -363,9 +179,8 @@ update danmu_info set active = false where bv in (
 		}
 		// following
 		String getFollowingSQL = """
-select star_mid
-	from user_follow join user_info on user_follow.star_mid = user_info.mid
-	where fan_mid = ? and active = true
+select star_mid from user_follow
+	where fan_mid = ? and star_mid in (select mid from user_active)
 		""";
 		ArrayList<Long> followingList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -383,9 +198,8 @@ select star_mid
 		Long[] following = followingList.toArray(new Long[0]);
 		// follower
 		String getFollowerSQL = """
-select fan_mid
-	from user_follow join user_info on user_follow.fan_mid = user_info.mid
-	where star_mid = ? and active = true
+select fan_mid from user_follow
+	where star_mid = ? and fan_mid in (select mid from user_active)
 		""";
 		ArrayList<Long> followerList = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
@@ -401,7 +215,7 @@ select fan_mid
 			return null;
 		}
 		Long [] follower = followerList.toArray(new Long[0]);
-		// watched
+		// TODO: watched
 		String getWatchedSQL = """
 select bv
 	from user_watch_video join video_info on user_watch_video.bv = video_info.bv
@@ -421,7 +235,7 @@ select bv
 			return null;
 		}
 		String [] watched = watchedList.toArray(new String[0]);
-		// liked
+		// TODO: liked
 		String getLikedSQL = """
 select bv
 	from user_like_video join video_info on user_like_video.bv = video_info.bv
@@ -441,7 +255,7 @@ select bv
 			return null;
 		}
 		String [] liked = likedList.toArray(new String[0]);
-		// collected
+		// TODO: collected
 		String getCollectedSQL = """
 select bv
 	from user_fav_video join video_info on user_fav_video.bv = video_info.bv

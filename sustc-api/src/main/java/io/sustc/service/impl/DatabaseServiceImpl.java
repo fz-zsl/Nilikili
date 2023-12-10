@@ -57,16 +57,24 @@ public class DatabaseServiceImpl implements DatabaseService {
 		List<VideoRecord> videoRecords
 	) { // TODO: ask the default value of coin and level
 		String createSQL = """
+-- drop all tables
 drop table if exists user_like_danmu;
 drop table if exists user_fav_video;
 drop table if exists user_like_video;
 drop table if exists user_coin_video;
 drop table if exists user_watch_video;
 drop table if exists user_follow;
+drop view if exists danmu_active;
+drop view if exists video_active_super;
+drop view if exists video_active;
+drop view if exists user_active;
 drop table if exists danmu_info;
 drop table if exists video_info;
 drop table if exists user_info;
 
+
+
+-- create tables
 create table user_info (
     mid bigserial not null,
     name text not null,
@@ -74,13 +82,15 @@ create table user_info (
     birthday date,
     level smallint not null default 0,
     sign text,
-    identity varchar(10) not null,
+    identity varchar(5) not null default 'USER',
     pwd char(256), -- encrypted by SHA256
     qqid varchar(20),
-    wxid varchar(50),
+    wxid varchar(30),
     coin int default 0,
     active boolean default true,
-    constraint mid_pk primary key (mid)
+    constraint mid_pk primary key (mid),
+    constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN')),
+    constraint identity_valid check (identity in ('USER', 'SUPER'))
 );
 
 create table video_info (
@@ -161,6 +171,9 @@ create table user_like_danmu (
     constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id)
 );
 
+
+
+-- create views
 create or replace view user_active as
 	select * from user_info where active = true;
 
@@ -174,6 +187,185 @@ create or replace view video_active_super as
 create or replace view danmu_active as
 	select * from danmu_info where active = true;
 
+
+
+-- function for VerifyAuth
+create extension if not exists pgcrypto;
+
+create or replace function verify_auth(
+    _mid bigint,
+    _pwd text,
+    _qqid text,
+    _wxid text
+)
+    returns bigint as $$
+        declare
+            mid_mid bigint;
+            qqid_mid bigint;
+            wxid_mid bigint;
+    begin
+        mid_mid := (
+            select mid from user_active
+                where user_active.mid = _mid\s
+                    and user_active.pwd = digest(_pwd, 'sha256')
+        );
+        qqid_mid := (
+            select mid from user_active
+                where user_active.qqid = _qqid
+        );
+        wxid_mid := (
+            select mid from user_active
+                where user_active.wxid = _wxid
+        );
+        if _qqid is not null and _wxid is not null
+            and qqid_mid <> wxid_mid then
+            raise notice 'OIDC via QQ and WeChat contradicts.';
+            return -1;
+        end if;
+        if mid_mid is null and qqid_mid is null and wxid_mid is null then
+            raise notice 'Authentication failed.';
+            return -1;
+        end if;
+        if mid_mid is not null then
+            return mid_mid;
+        end if;
+        if qqid_mid is not null then
+            return qqid_mid;
+        end if;
+        if wxid_mid is not null then
+            return wxid_mid;
+        end if;
+    end $$ language plpgsql;
+
+
+
+-- functions for UserServiceImpl
+create or replace function user_reg_check()
+    returns trigger as $$
+    begin
+        if new.name is null or new.name = '' then
+            raise notice 'Name cannot be null or empty.';
+            return NULL;
+        end if;
+        if new.pwd is null or new.pwd = '' then
+            raise notice 'Password cannot be null or empty.';
+            return NULL;
+        end if;
+        new.pwd := digest(new.pwd, 'sha256');
+        if new.sex is null then
+            raise notice 'Sex cannot be null.';
+            return NULL;
+        end if;
+        if upper(new.sex) = 'M' or new.sex = '男'
+            or upper(new.sex) = 'MALE' or new.sex = '♂' then
+            new.sex := 'MALE';
+        elsif upper(new.sex) = 'F' or new.sex = '女'
+            or upper(new.sex) = 'FEMALE' or new.sex = '♀' then
+            new.sex := 'FEMALE';
+        else
+            new.sex := 'UNKNOWN';
+        end if;
+        if (select count(*) from user_active where user_active.name = new.name) > 0 then
+            raise notice 'Username used.';
+            return NULL;
+        end if;
+        if (select count(*) from user_active where user_active.qqid = new.qqid) > 0 then
+            raise notice 'QQ used.';
+            return NULL;
+        end if;
+        if (select count(*) from user_active where user_active.wxid = new.wxid) > 0 then
+            raise notice 'WeChat used.';
+            return NULL;
+        end if;
+        return new;
+    end $$ language plpgsql;
+
+create or replace function user_reg(
+    _name text,
+    _sex text,
+    _birthday text,
+    _sign text,
+    _pwd text,
+    _qqid varchar(20),
+    _wxid varchar(30)
+)
+    returns bigint as $$
+    declare
+        id bigint;
+    begin
+        begin
+	        insert into user_info (name, sex, birthday, sign, pwd, qqid, wxid)
+	            values (_name, _sex, _birthday, _sign, _pwd, _qqid, _wxid);
+        exception when others then
+            raise notice 'User registration failed.';
+            return -1;
+        end;
+        id := (
+			select mid from user_active
+				where user_active.name = _name
+		);
+		return id;
+    end $$ language plpgsql;
+
+create or replace function user_del(
+    auth_mid bigint,
+    auth_pwd text,
+    auth_qqid text,
+    auth_wxid text,
+    _mid bigint
+)
+    returns boolean as $$
+    begin
+        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
+            raise notice 'Authentication failed.';
+            return false;
+        end if;
+        if (select count(*) from user_active where user_active.mid = _mid) = 0 then
+            raise notice 'User not found.';
+            return false;
+        end if;
+        if auth_mid = _mid or
+            ((select identity from user_active where user_active.mid = auth_mid) = 'SUPER')
+            and ((select identity from user_active where user_active.mid = _mid) = 'USER') then
+            update user_info set active = false where user_info.mid = _mid;
+            update video_info set active = false where video_info.ownMid = _mid;
+            update danmu_info set active = false where bv in (
+                select bv from video_info where video_info.ownMid = _mid
+            );
+            update danmu_info set active = false where senderMid = _mid;
+            return true;
+        end if;
+    end $$ language plpgsql;
+
+create or replace function add_follow(
+    auth_mid bigint,
+    auth_pwd text,
+    auth_qqid text,
+    auth_wxid text,
+    followee_mid bigint
+)
+    returns boolean as $$
+    begin
+        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
+            raise notice 'Authentication failed.';
+            return false;
+        end if;
+        if (select count(*) from user_active where user_active.mid = followee_mid) = 0 then
+			raise notice 'Followee not found.';
+			return false;
+		end if;
+		begin
+			insert into user_follow (star_mid, fan_mid) values (followee_mid, auth_mid);
+		exception when others then
+			raise notice 'Followee already followed.';
+			return false;
+		end;
+		return true;
+	end $$ language plpgsql;
+
+
+
+-- functions for VideoServiceImpl
 create or replace function generate_unique_bv() returns text as $$
 declare
     new_uuid text;
@@ -197,15 +389,14 @@ $$ language plpgsql;
 		// load user_info
 		String insertUserInfoSQL = """
 insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqid, wxid, coin)
-	values (?, ?, ?, to_date(?, 'YYYY-MM-DD'), ?, ?, ?, ?, ?, ?, ?);
+	values (?, ?, ?, to_date(?, ?), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?);
 		""";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserInfoSQL)) {
 			for (UserRecord userRecord : userRecords) {
 				stmt.setLong(1, userRecord.getMid());
 				stmt.setString(2, userRecord.getName());
-				String sexString = userRecord.getSex();
-				if (sexString.equals("M") || sexString.equals("男") || sexString.equals("♂")) {
+				String sexString = userRecord.getSex();if (sexString.equals("M") || sexString.equals("男") || sexString.equals("♂")) {
 					sexString = "MALE";
 				}
 				else if (sexString.equals("F") || sexString.equals("女") || sexString.equals("♀")) {
@@ -215,32 +406,47 @@ insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqi
 					sexString = "UNKNOWN";
 				}
 				stmt.setString(3, sexString);
-				if (userRecord.getBirthday() != null) {
-					String birthday = userRecord.getBirthday();
-					if (birthday.indexOf('月') == -1 || birthday.indexOf('日') == -1) {
-						stmt.setString(4, null);
-					}
-					else {
-						int month = Integer.parseInt(birthday.substring(0, birthday.indexOf('月')));
-						int day = Integer.parseInt(birthday.substring(birthday.indexOf('月') + 1, birthday.indexOf('日')));
-						stmt.setString(4, String.format("1970-%02d-%02d", month, day));
-					}
+				String birthday = userRecord.getBirthday();
+				stmt.setString(4, userRecord.getBirthday());
+				if (birthday == null || birthday.isEmpty()) {
+					stmt.setString(5, "MM-DD");
+				}
+				else if (birthday.matches("^[0-9]+月[0-9]+日$")) {
+					stmt.setString(5, "MM月DD日");
 				}
 				else {
-					stmt.setString(4, null);
+					int arg1 = Integer.parseInt(birthday.substring(0, birthday.indexOf('-')));
+					if (arg1 > 12) {
+						stmt.setString(5, "DD-MM");
+					}
+					else {
+						stmt.setString(5, "MM-DD");
+					}
 				}
-				stmt.setShort(5, userRecord.getLevel());
-				stmt.setString(6, userRecord.getSign());
-				stmt.setString(7, userRecord.getIdentity().name());
-				stmt.setString(8, EncryptSHA256.encrypt(userRecord.getPassword()));
-				stmt.setString(9, userRecord.getQq());
-				stmt.setString(10, userRecord.getWechat());
-				stmt.setDouble(11, 100.0); // TODO: check default coins
+				stmt.setShort(6, userRecord.getLevel());
+				stmt.setString(7, userRecord.getSign());
+				stmt.setString(8, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
+				stmt.setString(9, userRecord.getPassword());
+				stmt.setString(10, userRecord.getQq());
+				stmt.setString(11, userRecord.getWechat());
+				stmt.setInt(12, 0); // TODO: check default coins
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user records, " + e.getMessage());
+		}
+
+		String addUserTrigger = """
+create or replace trigger user_reg_trigger
+    before insert on user_info for each row
+    execute procedure user_reg_check();
+		""";
+		try (Connection conn = dataSource.getConnection();
+		     PreparedStatement stmt = conn.prepareStatement(addUserTrigger)) {
+			stmt.execute();
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
 		}
 
 		// load video_info

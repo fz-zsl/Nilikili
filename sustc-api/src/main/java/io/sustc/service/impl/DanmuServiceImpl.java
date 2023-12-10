@@ -31,7 +31,7 @@ public class DanmuServiceImpl implements DanmuService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>{@code content} is invalid (null or empty)</li>
 	 *   <li>the video is not published or the user has not watched this video</li>
 	 * </ul>
