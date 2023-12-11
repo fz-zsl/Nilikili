@@ -11,6 +11,10 @@ import java.sql.Timestamp;
  */
 @Data
 public class DanmuRecord implements Serializable {
+    /**
+     * The danmu's id {@code danmuId}.
+     */
+    private long danmuId;
 
     /**
      * The danmu's video {@code bv}.
