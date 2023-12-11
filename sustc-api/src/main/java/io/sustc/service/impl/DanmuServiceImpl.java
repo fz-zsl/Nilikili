@@ -7,8 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
-import java.sql.*;
-import java.time.LocalDateTime;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,73 +41,19 @@ public class DanmuServiceImpl implements DanmuService {
 	 */
 	@Override
 	public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return -1;
-		}
-		// handle invalid bv and status
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return -1;
-		}
-		String checkBvSQL = """
-select count(*) from video_info where bv = ? and active = true
-	and revMid is not null and (publicTime is null or publicTime < now())
-		""";
+		String sendDanmuSQL = "select send_danmu(?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
+		     PreparedStatement stmt = conn.prepareStatement(sendDanmuSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
+			stmt.setString(6, content);
+			stmt.setFloat(7, time);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return -1;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return -1;
-		}
-		// the user hasn't watched the video
-		String checkWatchedSQL = """
-select count(*) from user_watch_video
-	where mid = ? and bv = ?
-		""";
-		try (Connection conn = dataSource.getConnection();
-		         PreparedStatement stmt = conn.prepareStatement(checkWatchedSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setString(2, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Please comment after you've watched the video.");
-					return -1;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return -1;
-		}
-		// add danmu
-		String addDanmuSQL = """
-insert into danmu_info (bv, senderMid, showTime, content, postTime) values (?, ?, ?, ?, ?);
-select danmu_id from danmu_info where bv = ? and senderMid = ? and postTime = ?
-		""";try (Connection conn = dataSource.getConnection();
-		         PreparedStatement stmt = conn.prepareStatement(addDanmuSQL)) {
-			stmt.setString(1, bv);
-			stmt.setLong(2, auth_mid);
-			stmt.setFloat(3, time);
-			stmt.setString(4, content);
-			Timestamp ts = Timestamp.valueOf(LocalDateTime.now());
-			stmt.setTimestamp(5, ts);
-			stmt.setString(6, bv);
-			stmt.setLong(7, auth_mid);
-			stmt.setTimestamp(8, ts);
-			try(ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				return rs.getInt(1);
+				return rs.getLong(1);
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
@@ -138,73 +86,23 @@ select danmu_id from danmu_info where bv = ? and senderMid = ? and postTime = ?
 	@Override
 	public List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter) {
 		List<Long> result = new ArrayList<>();
-		// handle invalid bv and status
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return result;
-		}
-		String checkBvSQL = """
-select duration from video_info where bv = ? and active = true
-	and revMid is not null and (publicTime is null or publicTime < now())
-		""";
-		float duration;
+		String displayDanmuSQL = "select display_danmu(?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				if (!rs.next()) {
-					log.error("Video not found or insufficient permission");
-					return result;
-				}
-				duration = rs.getFloat(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
-		}
-		// handle invalid time interval
-		if (timeStart > timeEnd || timeStart < 0 || timeEnd > duration) {
-			log.error("Invalid interval.");
-			return result;
-		}
-		// retrieve danmu in the specified time interval
-		String selectDanmuSQL;
-		if (filter) {
-			selectDanmuSQL = """
-with allDanmu as (
-	select danmu_id, content, postTime from danmu_info
-		where bv = ? and active = true
-		and showTime between ? and ?
-)
-select danmu_id from (
-	select danmu_id, postTime,
-		min(posttime) over(partition by content) as firstPosted
-	from allDanmu
-) as DPP where postTime = firstPosted;
-			""";
-		}
-		else {
-			selectDanmuSQL = """
-select danmu_id from danmu_info
-	where bv = ? and active = true
-	and showTime between ? and ?
-			""";
-		}
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(selectDanmuSQL)) {
+		     PreparedStatement stmt = conn.prepareStatement(displayDanmuSQL)) {
 			stmt.setString(1, bv);
 			stmt.setFloat(2, timeStart);
 			stmt.setFloat(3, timeEnd);
+			stmt.setBoolean(4, filter);
 			try (ResultSet rs = stmt.executeQuery()) {
 				while (rs.next()) {
 					result.add(rs.getLong(1));
 				}
 			}
+			return result;
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
-			return result;
+			return null;
 		}
-		return result;
 	}
 
 	/**
@@ -224,61 +122,18 @@ select danmu_id from danmu_info
 	 */
 	@Override
 	public boolean likeDanmu(AuthInfo auth, long id) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid id
-		String checkDanmuSQL = """
-select count(*) from danmu_info
-	where danmu_id = ? and active = true
-		""";
+		String likeDanmuSQL = "select like_danmu(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkDanmuSQL)) {
-			stmt.setLong(1, id);
+		     PreparedStatement stmt = conn.prepareStatement(likeDanmuSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setLong(5, id);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Danmu not found.");
-					return false;
-				}
+				return rs.getBoolean(1);
 			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// check if the user has liked this danmu
-		String DupCheckSQL = """
-select count(*) from user_like_danmu
-	where danmu_id = ? and mid = ?
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(DupCheckSQL)) {
-			stmt.setLong(1, id);
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) > 0) {
-					log.error("You've liked this danmu before");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// insert like into SQL
-		String insertLikeSQL = """
-insert into user_like_danmu (danmu_id, mid) values (?, ?)
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(insertLikeSQL)) {
-			stmt.setLong(1, id);
-			stmt.setLong(1, auth_mid);
-			stmt.executeQuery();
-			return true;
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;

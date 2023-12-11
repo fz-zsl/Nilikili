@@ -43,40 +43,17 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public String postVideo(AuthInfo auth, PostVideoReq req) {
-		// handle invalid author
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return null;
-		}
-		if (!VerifyVideoReq.verifyVideoReq(req, auth_mid)) {
-			log.error("Invalid PostVideoReq.");
-			return null;
-		}
-		// insert video into video_info
-		String insertVideoSQL = """
-insert into video_info (bv, title, ownMid, commitTime, publicTime, duration, descr)
-	values (generate_unique_bv(), ?, ?, ?, ?, ?, ?)
-		""";
+		String postVideoSQL = "select post_video(?, ?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(insertVideoSQL)) {
-			stmt.setString(1, req.getTitle());
-			stmt.setLong(2, auth_mid);
-			stmt.setTimestamp(3, Timestamp.valueOf(LocalDateTime.now()));
-			stmt.setTimestamp(4, req.getPublicTime());
-			stmt.setFloat(5, req.getDuration());
+			 PreparedStatement stmt = conn.prepareStatement(postVideoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, req.getTitle());
 			stmt.setString(6, req.getDescription());
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		// get bv of the video
-		String getBvSQL = "select bv from video_info where title = ? and ownMid = ? and active = true";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getBvSQL)) {
-			stmt.setString(1, req.getTitle());
-			stmt.setLong(2, auth_mid);
+			stmt.setFloat(7, req.getDuration());
+			stmt.setTimestamp(8, req.getPublicTime());
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
 				return rs.getString(1);
@@ -104,84 +81,22 @@ insert into video_info (bv, title, ownMid, commitTime, publicTime, duration, des
 	 */
 	@Override
 	public boolean deleteVideo(AuthInfo auth, String bv) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String deleteVideoSQL = "select del_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
+			 PreparedStatement stmt = conn.prepareStatement(deleteVideoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
+				return rs.getBoolean(1);
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
 		}
-		// get auth identity
-		String getAuthIdentitySQL = "select identity from user_info where mid = ?";
-		String authIdentity;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getAuthIdentitySQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				authIdentity = rs.getString(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// get owner mid
-		String getOwnerMidSQL = "select ownMid from video_info where bv = ?";
-		long ownerMid;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getOwnerMidSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				ownerMid = rs.getLong(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		if (authIdentity.equals("USER") && auth_mid != ownerMid) {
-			log.error("Video not found or insufficient permission");
-		}
-		// deletion in SQL
-		String deletionSQL = "update video_info set active = false where bv = ?";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(deletionSQL)) {
-			stmt.setString(1, bv);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// cascade delete danmu on user's video
-		String deleteDanmuSQL = "update danmu_info set active = false where bv = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(deleteDanmuSQL)) {
-			stmt.setString(1, bv);
-			stmt.executeUpdate();
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		return true;
 	}
 
 	/**
@@ -207,95 +122,26 @@ insert into video_info (bv, title, ownMid, commitTime, publicTime, duration, des
 	 */
 	@Override
 	public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid bv and get owner's mid
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		String checkBvSQL = "select ownMid from video_info where bv = ? and active = true";
-		long ownerMid;
+		String updateVideoInfoSQL = "select update_video(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				if (rs.next()) {
-					ownerMid = rs.getLong(1);
-				}
-				else {
-					log.error("Modification failed (video not found or insufficient permission).");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// auth is not the owner
-		if (auth_mid != ownerMid) {
-			log.error("Modification failed (video not found or insufficient permission).");
-			return false;
-		}
-		// invalid req
-		if (!VerifyVideoReq.verifyVideoReq(req, auth_mid)) {
-			log.error("Invalid PostVideoReq.");
-			return false;
-		}
-		// invalid information (duration and others)
-		String getVideoInfoSQL = """
-select (bv, title, descr, duration, publicTime)
-	from video_info where bv = ? and active = true
-		""";
-		String prevTitle, prevDescr;
-		float prevDuration;
-		Timestamp prevPublicTime;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getVideoInfoSQL)) {
-			stmt.setString(1, bv);
+			 PreparedStatement stmt = conn.prepareStatement(updateVideoInfoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
+			stmt.setString(6, req.getTitle());
+			stmt.setString(7, req.getDescription());
+			stmt.setFloat(8, req.getDuration());
+			stmt.setTimestamp(9, req.getPublicTime());
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				prevTitle = rs.getString("title");
-				prevDescr = rs.getString("descr");
-				prevDuration = rs.getFloat("duration");
-				prevPublicTime = rs.getTimestamp("publicTime");
+				return rs.getBoolean(1);
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
 		}
-		// duration changes => invalid
-		if (req.getDuration() != prevDuration) {
-			log.error("Duration changes.");
-			return false;
-		}
-		// nothing changes => invalid
-		if (req.getTitle().equals(prevTitle)
-				&& req.getDescription().equals(prevDescr)
-				&& req.getPublicTime().equals(prevPublicTime)) {
-			log.error("Nothing changes.");
-			return false;
-		}
-		// update video info
-		String updateVideoSQL = """
-update video_info
-	set title = ?, descr = ?, publicTime = ?
-	where bv = ? and active = true
-		""";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(updateVideoSQL)) {
-			stmt.setString(1, req.getTitle());
-			stmt.setString(2, req.getDescription());
-			stmt.setTimestamp(3, req.getPublicTime());
-			stmt.setString(4, bv);
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		return true;
 	}
 
 	/**
@@ -352,64 +198,18 @@ update video_info
 	 */
 	@Override
 	public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return null;
-		}
-		// handle invalid keywords
-		if (keywords == null || keywords.isEmpty()) {
-			log.error("No keyword provided.");
-			return null;
-		}
-		// handle invalid pageSize and pageNum
-		if (pageSize <= 0 || pageNum <= 0) {
-			log.error("Invalid pageSize or pageNum.");
-			return null;
-		}
-		// split keywords
-		String[] keywordList = keywords.split(" +");
-		String searchVideoSQL1 = """
-select bv from video_info
-	join (
-		select bv, count(*) as cnt
-			from user_watch_video group by bv
-	) as watchCnt on video_info.bv = watchCnt.bv
-	join user_info on ownMid = mid
-	where active = true and (
-		revMid is not null and publicTime <= now() -- visible to all
-		or mid = ? -- visible to owner himself/herself
-		or identity = 'SUPERUSER' -- visible to superuser
-	)
-	order by (
-		(
-		""";
-//		array_length(regexp_matches(title, ?, 'g'), 1) +
-//		array_length(regexp_matches(descr, ?, 'g'), 1) +
-//		array_length(regexp_matches(name , ?, 'g'), 1) +
-		String searchVideoSQL2 = """
-		0) as relevance desc
-		cnt desc
-	) limit ? offset ?
-		""";
-		String searchVideoSQL = searchVideoSQL1 + ("""
-			array_length(regexp_matches(title, ?, 'g'), 1) +
-			array_length(regexp_matches(descr, ?, 'g'), 1) +
-			array_length(regexp_matches(name , ?, 'g'), 1) +
-		"""
-		).repeat(keywordList.length) + searchVideoSQL2;
+		List<String> result = new ArrayList<>();
+		String searchVideoSQL = "select bv from search_video(?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(searchVideoSQL)) {
-			stmt.setLong(1, auth_mid);
-			for (int i = 0; i < keywordList.length; i++) {
-				stmt.setString(2 + 3 * i, keywordList[i]);
-				stmt.setString(3 + 3 * i, keywordList[i]);
-				stmt.setString(4 + 3 * i, keywordList[i]);
-			}
-			stmt.setInt(2 + 3 * keywordList.length, pageSize);
-			stmt.setInt(3 + 3 * keywordList.length, (pageNum - 1) * pageSize);
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, keywords);
+			stmt.setInt(6, pageSize);
+			stmt.setInt(7, pageNum);
 			try (ResultSet rs = stmt.executeQuery()) {
-				List<String> result = new ArrayList<>();
 				while (rs.next()) {
 					result.add(rs.getString(1));
 				}
@@ -436,59 +236,18 @@ select bv from video_info
 	 */
 	@Override
 	public double getAverageViewRate(String bv) {
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return -1;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String getAverageViewRateSQL = "select get_avg_view_rate(?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
+			 PreparedStatement stmt = conn.prepareStatement(getAverageViewRateSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return -1;
-				}
+				return rs.getDouble(1);
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return -1;
 		}
-		// get average view rate
-		String getAverageViewRateSQL = "select count(*), avg(lastpos) from user_watch_video where bv = ?";
-		double avg;
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getAverageViewRateSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("No one has watched this video.");
-					return -1;
-				}
-				avg = rs.getDouble(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return -1;
-		}
-		// get duration
-		String getDurationSQL = "select duration from video_info where bv = ?";
-		float duration;
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getDurationSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				duration = rs.getFloat(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return -1;
-		}
-		return avg / duration;
 	}
 
 	/**
@@ -507,55 +266,20 @@ select bv from video_info
 	@Override
 	public Set<Integer> getHotspot(String bv) {
 		Set<Integer> result = new HashSet<>();
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return result;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String getHotspotSQL = "select get_hotspot(?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
+			 PreparedStatement stmt = conn.prepareStatement(getHotspotSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return result;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
-		}
-		// get hotspot
-		String getHotspotSQL = """
-with danmu_cnt as (
-    select floor(showtime / 10) as chunkId, count(*) as cnt
-        from danmu_info where bv = ? group by chunkId
-)
-select chunkId, maxx from (
-    select chunkId, cnt, max(cnt) over() as maxx from danmu_cnt
-) as hotspot where cnt = maxx
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getHotspotSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(2) == 0) {
-					log.error("No one has sent danmu on this video.");
-					return result;
-				}
-				result.add(rs.getInt(1));
 				while (rs.next()) {
 					result.add(rs.getInt(1));
 				}
+				return result;
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
-			return result;
+			return new HashSet<>();
 		}
-		return result;
 	}
 
 	/**
@@ -576,97 +300,18 @@ select chunkId, maxx from (
 	 */
 	@Override
 	public boolean reviewVideo(AuthInfo auth, String bv) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String revVideoSQL = "select rev_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
+			 PreparedStatement stmt = conn.prepareStatement(revVideoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
+				return rs.getBoolean(1);
 			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// get auth identity
-		String getAuthIdentitySQL = "select identity from user_info where mid = ?";
-		String authIdentity;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getAuthIdentitySQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				authIdentity = rs.getString(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		if (authIdentity.equals("USER")) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		// get owner mid
-		String getOwnerMidSQL = "select ownMid from video_info where bv = ?";
-		long ownerMid;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getOwnerMidSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				ownerMid = rs.getLong(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		if (authIdentity.equals("SUPERUSER") && auth_mid == ownerMid) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		// check if the video is already reviewed
-		String checkReviewSQL = "select count(*) from video_info where bv = ? and revMid is not null";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkReviewSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) > 0) {
-					log.error("The video is already reviewed.");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// review the video
-		String reviewVideoSQL = """
-update video_info
-	set revMid = ?, reviewTime = ?
-	where bv = ?
-		""";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(reviewVideoSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
-			stmt.setString(3, bv);
-			stmt.executeUpdate();
-			return true;
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
@@ -692,131 +337,18 @@ update video_info
 	 */
 	@Override
 	public boolean coinVideo(AuthInfo auth, String bv) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String coinVideoSQL = "select coin_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
+			 PreparedStatement stmt = conn.prepareStatement(coinVideoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
+				return rs.getBoolean(1);
 			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// get auth identity
-		String getAuthIdentitySQL = "select identity from user_info where mid = ?";
-		String authIdentity;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getAuthIdentitySQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				authIdentity = rs.getString(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		long ownMid;
-		String getValidBvSQL = """
-select bv, ownMid from video_info
-	where bv = ? and ownMid <> ? and active = true and (
-		revMid is not null and publicTime <= now() -- visible to all
-		or ? = 'SUPERUSER')  -- visible to super user only
-		""";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(getValidBvSQL)) {
-			stmt.setString(1, bv);
-			stmt.setLong(2, auth_mid);
-			stmt.setString(3, authIdentity);
-			try (ResultSet rs = stmt.executeQuery()) {
-				if (!rs.next()) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
-				ownMid = rs.getLong(2);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// check if the user has coin
-		String checkCoinSQL = "select coin from user_info where mid = ?";
-		int coin;
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkCoinSQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				coin = rs.getInt(1);
-				if (coin == 0) {
-					log.error("The user has no coin.");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// check if the user has donated a coin to this video
-		String checkDonationSQL = "select count(*) from user_coin_video where mid = ? and bv = ?";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(checkDonationSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setString(2, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) > 0) {
-					log.error("The user has donated a coin to this video.");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// donate a coin to this video
-		String donateCoinSQL = """
-begin transaction;
-	update user_info set coin = coin - 1 where mid = ?;
-	update user_info set coin = coin + 1 where mid = ?;
-	insert into user_coin_video (mid, bv) values (?, ?);
-	do $$ begin
-	    if (select coin from user_info where mid = ?) < 0 then
-	        rollback;
-	    elsif (select active from video_info where bv = ?) = false then
-	        rollback;
-	    elsif (select active from video_info where bv = ?) = false then
-	        rollback;
-	    else
-	        commit;
-	    end if;
-	end $$;
-		""";
-		try (Connection conn = dataSource.getConnection();
-			 PreparedStatement stmt = conn.prepareStatement(donateCoinSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setLong(2, ownMid);
-			stmt.setLong(3, auth_mid);
-			stmt.setString(4, bv);
-			stmt.setLong(5, auth_mid);
-			stmt.executeUpdate();
-			return true;
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
@@ -842,92 +374,18 @@ begin transaction;
 	 */
 	@Override
 	public boolean likeVideo(AuthInfo auth, String bv) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String likeVideoSQL = "select like_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
+			 PreparedStatement stmt = conn.prepareStatement(likeVideoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
+				return rs.getBoolean(1);
 			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// get auth identity
-		String getAuthIdentitySQL = "select identity from user_info where mid = ?";
-		String authIdentity;
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getAuthIdentitySQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				authIdentity = rs.getString(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		String getValidBvSQL = """
-select bv from video_info
-	where bv = ? and ownMid <> ? and active = true and (
-		revMid is not null and publicTime <= now() -- visible to all
-		or ? = 'SUPERUSER')  -- visible to super user only
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getValidBvSQL)) {
-			stmt.setString(1, bv);
-			stmt.setLong(2, auth_mid);
-			stmt.setString(3, authIdentity);
-			try (ResultSet rs = stmt.executeQuery()) {
-				if (!rs.next()) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// check if the user has liked the video
-		String checkLikedSQL = "select count(*) from user_like_video where mid = ? and bv = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkLikedSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setString(2, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) > 0) {
-					log.error("The user has liked this video before.");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// add relationship
-		String InsertUserLikeSQL = "insert into user_like_video (mid, bv) values (?, ?)";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(InsertUserLikeSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setString(2, bv);
-			stmt.executeUpdate();
-			return true;
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;
@@ -953,92 +411,18 @@ select bv from video_info
 	 */
 	@Override
 	public boolean collectVideo(AuthInfo auth, String bv) {
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return false;
-		}
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return false;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
+		String collectVideoSQL = "select fav_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
+			 PreparedStatement stmt = conn.prepareStatement(collectVideoSQL)) {
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
+				return rs.getBoolean(1);
 			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// get auth identity
-		String getAuthIdentitySQL = "select identity from user_info where mid = ?";
-		String authIdentity;
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getAuthIdentitySQL)) {
-			stmt.setLong(1, auth_mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				authIdentity = rs.getString(1);
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		String getValidBvSQL = """
-select bv from video_info
-	where bv = ? and ownMid <> ? and active = true and (
-		revMid is not null and publicTime <= now() -- visible to all
-		or ? = 'SUPERUSER') -- visible to super user only
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getValidBvSQL)) {
-			stmt.setString(1, bv);
-			stmt.setLong(2, auth_mid);
-			stmt.setString(3, authIdentity);
-			try (ResultSet rs = stmt.executeQuery()) {
-				if (!rs.next()) {
-					log.error("Video not found or insufficient permission");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// check if the user has liked the video
-		String checkFavedSQL = "select count(*) from user_fav_video where mid = ? and bv = ?";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkFavedSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setString(2, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) > 0) {
-					log.error("The user has collected this video before.");
-					return false;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return false;
-		}
-		// add relationship
-		String InsertUserFavSQL = "insert into user_fav_video (mid, bv) values (?, ?)";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(InsertUserFavSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setString(2, bv);
-			stmt.executeUpdate();
-			return true;
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
 			return false;

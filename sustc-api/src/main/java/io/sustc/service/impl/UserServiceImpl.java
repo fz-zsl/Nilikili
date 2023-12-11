@@ -84,7 +84,7 @@ public class UserServiceImpl implements UserService {
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(userDeleteSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getQq());
+			stmt.setString(2, auth.getPassword());
 			stmt.setString(3, auth.getQq());
 			stmt.setString(4, auth.getWechat());
 			stmt.setLong(5, mid);
@@ -117,7 +117,7 @@ public class UserServiceImpl implements UserService {
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(userDeleteSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getQq());
+			stmt.setString(2, auth.getPassword());
 			stmt.setString(3, auth.getQq());
 			stmt.setString(4, auth.getWechat());
 			stmt.setLong(5, followeeMid);
