@@ -523,7 +523,6 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 					stmt.setLong(1, videoRecord.getViewerMids()[i]);
 					stmt.setFloat(3, videoRecord.getViewTime()[i]);
 					stmt.addBatch();
-					viewerCnt++;
 				}
 			}
 			stmt.executeBatch();
