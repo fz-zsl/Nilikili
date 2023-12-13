@@ -81,7 +81,7 @@ create table user_info (
     name text not null,
     sex varchar(10),
     birthday date,
-    level smallint not null default 0,
+    level smallint not null default 1,
     sign text,
     identity varchar(5) not null default 'USER',
     pwd char(256), -- encrypted by SHA256
@@ -92,7 +92,8 @@ create table user_info (
     constraint mid_pk primary key (mid),
     constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN')),
     constraint identity_valid check (identity in ('USER', 'SUPER')),
-    constraint coin_non_neg check (coin >= 0)
+    constraint coin_non_neg check (coin >= 0),
+    constraint level_valid check (level between 1 and 6)
 );
 
 create table video_info (
