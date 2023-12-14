@@ -184,47 +184,32 @@ create table user_like_danmu (
 		// load user_info
 		String insertUserInfoSQL = """
 insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqid, wxid, coin)
-	values (?, ?, ?, to_date(?, ?), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?);
+	values (?, ?, ?, to_date(?, 'MM月DD日'), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?);
 			""";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserInfoSQL)) {
 			for (UserRecord userRecord : userRecords) {
 				stmt.setLong(1, userRecord.getMid());
 				stmt.setString(2, userRecord.getName());
-				String sexString = userRecord.getSex();if (sexString.equals("M") || sexString.equals("男") || sexString.equals("♂")) {
+				String sexString = userRecord.getSex();
+				if (sexString.equals("男") || sexString.equals("M") || sexString.equals("♂")) {
 					sexString = "MALE";
 				}
-				else if (sexString.equals("F") || sexString.equals("女") || sexString.equals("♀")) {
+				else if (sexString.equals("女") || sexString.equals("F") || sexString.equals("♀")) {
 					sexString = "FEMALE";
 				}
 				else {
 					sexString = "UNKNOWN";
 				}
 				stmt.setString(3, sexString);
-				String birthday = userRecord.getBirthday();
 				stmt.setString(4, userRecord.getBirthday());
-				if (birthday == null || birthday.isEmpty()) {
-					stmt.setString(5, "MM-DD");
-				}
-				else if (birthday.matches("^[0-9]+月[0-9]+日$")) {
-					stmt.setString(5, "MM月DD日");
-				}
-				else {
-					int arg1 = Integer.parseInt(birthday.substring(0, birthday.indexOf('-')));
-					if (arg1 > 12) {
-						stmt.setString(5, "DD-MM");
-					}
-					else {
-						stmt.setString(5, "MM-DD");
-					}
-				}
-				stmt.setShort(6, userRecord.getLevel());
-				stmt.setString(7, userRecord.getSign());
-				stmt.setString(8, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
-				stmt.setString(9, userRecord.getPassword());
-				stmt.setString(10, userRecord.getQq());
-				stmt.setString(11, userRecord.getWechat());
-				stmt.setInt(12, userRecord.getCoin());
+				stmt.setShort(5, userRecord.getLevel());
+				stmt.setString(6, userRecord.getSign());
+				stmt.setString(7, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
+				stmt.setString(8, userRecord.getPassword());
+				stmt.setString(9, userRecord.getQq());
+				stmt.setString(10, userRecord.getWechat());
+				stmt.setInt(11, userRecord.getCoin());
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
