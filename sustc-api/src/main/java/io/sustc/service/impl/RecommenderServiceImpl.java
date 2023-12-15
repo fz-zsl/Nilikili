@@ -34,39 +34,13 @@ public class RecommenderServiceImpl implements RecommenderService {
 	 */
 	@Override
 	public List<String> recommendNextVideo(String bv) {
+		String recommendSQL = "select recommend_next_video(?)";
 		List<String> result = new ArrayList<>();
-		// handle invalid bv
-		if (bv == null || bv.isEmpty()) {
-			log.error("Video not found or insufficient permission");
-			return result;
-		}
-		String checkBvSQL = "select count(*) from video_info where bv = ? and active = true";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(checkBvSQL)) {
-			stmt.setString(1, bv);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				if (rs.getInt(1) == 0) {
-					log.error("Video not found or insufficient permission");
-					return result;
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
-		}
-		// get recommendations
-		String recommendSQL = """
-select count(bv) as cnt from (
-	(select mid from user_watch_video where bv = ?) watchedBv join user_watch_video
-		on watchedBv.mid = user_watch_video.mid) group by bv order by cnt desc limit 5
-		""";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
-				for (int i = 0; i < 5; ++i) {
-					if (!rs.next()) break;
+				while (rs.next()) {
 					result.add(rs.getString(1));
 				}
 				return result;
@@ -107,33 +81,8 @@ select count(bv) as cnt from (
 	 */
 	@Override
 	public List<String> generalRecommendations(int pageSize, int pageNum) {
+		String recommendSQL = "select general_recommendations(?, ?)";
 		List<String> result = new ArrayList<>();
-		// handle invalid page size and number
-		if (pageSize <= 0 || pageNum <= 0) {
-			log.error("Invalid page size or number");
-			return result;
-		}
-		String recommendSQL = """
-with auxCnt as (
-	select count(*) as cnt from user_watch_video where bv = ?
-)
-select bv, (
-    case
-        when auxCnt.cnt == 0 then 0
-        else ((
-            (select count(*) from user_like_video where bv = ?) +
-            (select count(*) from user_coin_video where bv = ?) +
-            (select count(*) from user_fav_video where bv = ?) +
-            (select count(*) from danmu_info where bv = ?) +
-            (select sum(lastpos) from user_watch_video where bv = ?)
-                / (select duration from video_info where bv = ?)
-            ) / auxCnt.cnt)
-    end) as score from video_info where active = true and (
-		revMid is not null and publicTime <= now() -- visible to all
-		or ? = 'SUPERUSER')  -- visible to super user only
-limit ? offset ?;
-		""";
-		// get recommendations
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setInt(1, pageSize);
@@ -178,44 +127,16 @@ limit ? offset ?;
 	 */
 	@Override
 	public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
+		String recommendSQL = "select recommend_video_for_user(?, ?, ?, ?, ?, ?)";
 		List<String> result = new ArrayList<>();
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return result;
-		}
-		// handle invalid page size and number
-		if (pageSize <= 0 || pageNum <= 0) {
-			log.error("Invalid page size or number");
-			return result;
-		}
-		// get recommendations
-		String recommendSQL = """
-with friends as (
-	select star_mid from user_follow where fan_mid = ?
-	intersect
-	select fan_mid from user_follow where star_mid = ?
-)
-select validBv.bv from (
-	select bv, count(*) as cnt from user_watch_video
-		where mid in (select * from friends) and bv not in (
-			select bv from user_watch_video where mid = ?
-		) group by bv) validBv
-	join video_info on video_info.bv = validBv.bv
-	join user_info on user_info.mid = video_info.ownMid
-	where video_info.active = true and (
-		revMid is not null and publicTime <= now() -- visible to all
-		or ? = 'SUPERUSER')  -- visible to super user only
-	order by cnt desc, level desc, publicTime desc
-	limit ? offset ?;
-		""";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setLong(2, auth_mid);
-			stmt.setInt(3, pageSize);
-			stmt.setInt(4, (pageNum - 1) * pageSize);
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setInt(5, pageSize);
+			stmt.setInt(6, (pageNum - 1) * pageSize);
 			try (ResultSet rs = stmt.executeQuery()) {
 				while (rs.next()) {
 					result.add(rs.getString(1));
@@ -248,39 +169,16 @@ select validBv.bv from (
 	 */
 	@Override
 	public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
+		String recommendSQL = "select recommend_friends(?, ?, ?, ?, ?, ?)";
 		List<Long> result = new ArrayList<>();
-		// handle invalid auth
-		long auth_mid = VerifyAuth.verifyAuth(auth);
-		if (auth_mid == -1) {
-			log.error("Auth verification failed.");
-			return result;
-		}
-		// handle invalid page size and number
-		if (pageSize <= 0 || pageNum <= 0) {
-			log.error("Invalid page size or number");
-			return result;
-		}
-		// get recommendations
-		String recommendSQL = """
-with newFriends as (
-	select fan_mid as mid, count(fan_mid) as cnt from
-     (select star_mid from user_follow where fan_mid = ?) myFollowings
-         join user_follow on myFollowings.star_mid = user_follow.star_mid
-     where fan_mid not in (select star_mid from user_follow where fan_mid = ?) and fan_mid <> ?
-     group by fan_mid
-)
-select user_info.mid
-	from newFriends join user_info
-		on newFriends.mid = user_info.mid
-	order by cnt desc, level desc limit ? offset ?;
-		""";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
-			stmt.setLong(1, auth_mid);
-			stmt.setLong(2, auth_mid);
-			stmt.setLong(3, auth_mid);
-			stmt.setInt(4, pageSize);
-			stmt.setInt(5, (pageNum - 1) * pageSize);
+			stmt.setLong(1, auth.getMid());
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setInt(5, pageSize);
+			stmt.setInt(6, (pageNum - 1) * pageSize);
 			try (ResultSet rs = stmt.executeQuery()) {
 				while (rs.next()) {
 					result.add(rs.getLong(1));

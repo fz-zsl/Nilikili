@@ -55,10 +55,9 @@ public class DatabaseServiceImpl implements DatabaseService {
 		List<DanmuRecord> danmuRecords,
 		List<UserRecord> userRecords,
 		List<VideoRecord> videoRecords
-	) { // TODO: ask the default value of coin and level
+	) {
 		String createSQL = """
-
-				-- drop all tables
+-- drop all tables
 drop table if exists user_like_danmu;
 drop table if exists user_fav_video;
 drop table if exists user_like_video;
@@ -88,12 +87,7 @@ create table user_info (
     qqid varchar(20),
     wxid varchar(30),
     coin int default 0,
-    active boolean default true,
-    constraint mid_pk primary key (mid),
-    constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN')),
-    constraint identity_valid check (identity in ('USER', 'SUPER')),
-    constraint coin_non_neg check (coin >= 0),
-    constraint level_valid check (level between 1 and 6)
+    active boolean default true
 );
 
 create table video_info (
@@ -106,9 +100,8 @@ create table video_info (
     publicTime timestamp,
     duration float8, -- in seconds
     descr text, -- description
-    active boolean default true,
+    active boolean default true
         -- only means not deleted, may not be visible
-    constraint bv_pk primary key (bv)
 );
 
 create table danmu_info (
@@ -119,59 +112,38 @@ create table danmu_info (
         -- the display time from the start of video (in seconds)
     content text,
     postTime timestamp,
-    active boolean default true,
-	constraint danmu_id_pk primary key (danmu_id),
-    constraint mid_fk foreign key (senderMid) references user_info(mid),
-    constraint bv_fk foreign key (bv) references video_info(bv)
+    active boolean default true
 );
 
 create table user_follow (
     star_mid bigint not null,
-    fan_mid bigint not null,
-    constraint user_follow_pk primary key (star_mid, fan_mid),
-    constraint star_fk foreign key (star_mid) references user_info(mid),
-    constraint fan_fk foreign key (fan_mid) references user_info(mid)
+    fan_mid bigint not null
 );
 
 create table user_watch_video (
     mid bigint not null,
     bv varchar(15) not null,
-    lastpos float8 not null, -- last watch time stamp in seconds
-    constraint user_watch_video_pk primary key (mid, bv),
-    constraint mid_fk foreign key (mid) references user_info(mid),
-    constraint bv_fk foreign key (bv) references video_info(bv)
+    lastpos float8 not null -- last watch time stamp in seconds
 );
 
 create table user_coin_video (
     mid bigint not null,
-    bv varchar(25) not null,
-    constraint user_coin_video_pk primary key (mid, bv),
-    constraint mid_fk foreign key (mid) references user_info(mid),
-    constraint bv_fk foreign key (bv) references video_info(bv)
+    bv varchar(25) not null
 );
 
 create table user_like_video (
     mid bigint not null,
-    bv varchar(15) not null,
-    constraint user_like_video_pk primary key (mid, bv),
-    constraint mid_fk foreign key (mid) references user_info(mid),
-    constraint bv_fk foreign key (bv) references video_info(bv)
+    bv varchar(15) not null
 );
 
 create table user_fav_video (
     mid bigint not null,
-    bv varchar(15) not null,
-    constraint user_fav_video_pk primary key (mid, bv),
-    constraint mid_fk foreign key (mid) references user_info(mid),
-    constraint bv_fk foreign key (bv) references video_info(bv)
+    bv varchar(15) not null
 );
 
 create table user_like_danmu (
     danmu_id bigint not null,
-    mid bigint not null,
-    constraint user_like_danmu_pk primary key (danmu_id, mid),
-    constraint mid_fk foreign key (mid) references user_info(mid),
-    constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id)
+    mid bigint not null
 );
 		""";
 		try (Connection conn = dataSource.getConnection();
@@ -202,7 +174,7 @@ insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqi
 					sexString = "UNKNOWN";
 				}
 				stmt.setString(3, sexString);
-				stmt.setString(4, userRecord.getBirthday());
+				stmt.setString(4, userRecord.getBirthday().isEmpty() ? null : userRecord.getBirthday());
 				stmt.setShort(5, userRecord.getLevel());
 				stmt.setString(6, userRecord.getSign());
 				stmt.setString(7, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
@@ -365,8 +337,44 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 
 
 		String createFunctions = """
+-- add keys and constraints
+alter table user_info add constraint mid_pk primary key (mid);
+alter table user_info add constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN'));
+alter table user_info add constraint identity_valid check (identity in ('USER', 'SUPER'));
+alter table user_info add constraint coin_non_neg check (coin >= 0);
+alter table user_info add constraint level_valid check (level between 0 and 6); -- from 0 or 1?
 
-				-- create views
+alter table video_info add constraint bv_pk primary key (bv);
+
+alter table danmu_info add constraint danmu_id_pk primary key (danmu_id);
+alter table danmu_info add constraint mid_fk foreign key (senderMid) references user_info(mid);
+alter table danmu_info add constraint bv_fk foreign key (bv) references video_info(bv);
+
+alter table user_follow add constraint user_follow_pk primary key (star_mid, fan_mid);
+alter table user_follow add constraint star_fk foreign key (star_mid) references user_info(mid);
+alter table user_follow add constraint fan_fk foreign key (fan_mid) references user_info(mid);
+
+alter table user_watch_video add constraint user_watch_video_pk primary key (mid, bv);
+alter table user_watch_video add constraint mid_fk foreign key (mid) references user_info(mid);
+alter table user_watch_video add constraint bv_fk foreign key (bv) references video_info(bv);
+
+alter table user_coin_video add constraint user_coin_video_pk primary key (mid, bv);
+alter table user_coin_video add constraint mid_fk foreign key (mid) references user_info(mid);
+alter table user_coin_video add constraint bv_fk foreign key (bv) references video_info(bv);
+
+alter table user_like_video add constraint user_like_video_pk primary key (mid, bv);
+alter table user_like_video add constraint mid_fk foreign key (mid) references user_info(mid);
+alter table user_like_video add constraint bv_fk foreign key (bv) references video_info(bv);
+
+alter table user_fav_video add constraint user_fav_video_pk primary key (mid, bv);
+alter table user_fav_video add constraint mid_fk foreign key (mid) references user_info(mid);
+alter table user_fav_video add constraint bv_fk foreign key (bv) references video_info(bv);
+
+alter table user_like_danmu add constraint user_like_danmu_pk primary key (danmu_id, mid);
+alter table user_like_danmu add constraint mid_fk foreign key (mid) references user_info(mid);
+alter table user_like_danmu add constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id);
+
+-- create views
 create or replace view user_active as
 	select * from user_info where active = true;
 
@@ -402,14 +410,22 @@ create or replace function verify_auth(
                 where user_active.mid = _mid
                     and user_active.pwd = digest(_pwd, 'sha256')
         );
-        qqid_mid := (
-            select mid from user_active
-                where user_active.qqid = _qqid
-        );
-        wxid_mid := (
-            select mid from user_active
-                where user_active.wxid = _wxid
-        );
+        if (_qqid is null or _qqid = '') then
+            qqid_mid := null;
+		else
+			qqid_mid := (
+				select mid from user_active
+					where user_active.qqid = _qqid
+			);
+		end if;
+		if (_wxid is null or _wxid = '') then
+			wxid_mid := null;
+		else
+	        wxid_mid := (
+	            select mid from user_active
+	                where user_active.wxid = _wxid
+	        );
+	    end if;
         if _qqid is not null and _wxid is not null
             and qqid_mid <> wxid_mid then
             raise notice 'OIDC via QQ and WeChat contradicts.';
