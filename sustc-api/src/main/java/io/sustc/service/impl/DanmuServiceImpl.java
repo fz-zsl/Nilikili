@@ -74,7 +74,7 @@ public class DanmuServiceImpl implements DanmuService {
 	 * @return a list of danmus id, sorted by {@code time}
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>
 	 *     {@code timeStart} and/or {@code timeEnd} is invalid ({@code timeStart} <= {@code timeEnd}
 	 *     or any of them < 0 or > video duration)
@@ -116,7 +116,7 @@ public class DanmuServiceImpl implements DanmuService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code id} is invalid (<= 0 or not found)</li>
+	 *   <li>cannot find a danmu corresponding to the {@code id}</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
 	 */

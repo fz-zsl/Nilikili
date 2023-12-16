@@ -42,6 +42,7 @@ public class DatabaseServiceImpl implements DatabaseService {
 	public List<Integer> getGroupMembers() {
 		return List.of(12212232);
 	}
+
 	/**
 	 * Imports data to an empty database.
 	 * Invalid data will not be provided.
@@ -598,7 +599,7 @@ create or replace function add_follow(
 			insert into user_follow (star_mid, fan_mid) values (followee_mid, auth_mid);
 		exception when others then
 			raise notice 'Followee already followed.';
-			return false;
+			return true;
 		end;
 		return true;
 	end $$ language plpgsql;
@@ -710,7 +711,11 @@ create or replace function update_video(
             duration = _duration,
             publicTime = _publicTime
             where bv = _bv;
-        return true;
+        if (select revMid from video_active_super where bv = _bv) is not null then
+			update video_info set revMid = null, reviewTime = null where bv = _bv;
+			return true;
+		end if;
+        return false;
     end $$ language plpgsql;
 
 create or replace function search_video(
@@ -747,7 +752,7 @@ create or replace function search_video(
                 from (
                     (select bv, title, descr, ownMid, name, revMid, publicTime
                         from (video_active_super join user_active on ownMid = mid)) tmp2
-                    cross join (SELECT regexp_split_to_table(keywords, E'\\\\\\\\s+') as word) tmp3
+                    cross join (SELECT regexp_split_to_table(keywords, E'\\s+') as word) tmp3
                 )
             as tmp1) tmp4
         on watch_cnt.bv = tmp4.bv
@@ -849,10 +854,6 @@ create or replace function coin_video(
             raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
-            return false;
-        end if;
         if (select identity from user_active where mid = auth_mid) = 'USER' then
             if (select count(*) from video_active where bv = _bv) = 0 then
                 raise notice 'Video doesn''t exist.';
@@ -872,9 +873,6 @@ create or replace function coin_video(
         begin
             insert into user_coin_video (mid, bv) values (auth_mid, _bv);
             update user_info set coin = coin - 1 where mid = auth_mid;
-            update user_info set coin = coin + 1 where mid = (
-                select ownMid from video_active_super where bv = _bv
-            );
         exception when others then
             raise notice 'Coin failed.';
             return false;
@@ -895,10 +893,6 @@ create or replace function like_video(
     begin
         if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
             raise notice 'Authentication failed.';
-            return false;
-        end if;
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
             return false;
         end if;
         if (select identity from user_active where mid = auth_mid) = 'USER' then
@@ -940,10 +934,6 @@ create or replace function like_video(
     begin
         if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
             raise notice 'Authentication failed.';
-            return false;
-        end if;
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
             return false;
         end if;
         if (select identity from user_active where mid = auth_mid) = 'USER' then
@@ -991,10 +981,6 @@ create or replace function send_danmu (
     begin
         if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
             raise notice 'Authentication failed.';
-            return -1;
-        end if;
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
             return -1;
         end if;
         if (select identity from user_active where mid = auth_mid) = 'USER' then
@@ -1128,9 +1114,9 @@ create or replace function general_recommendations (
                 when (select count(*) as cnt into auxCnt from user_watch_video where bv = video_active_super.bv) = 0
                     then 0
                 else ((
-                    (select count(*) from user_like_video where user_like_video.bv = video_active_super.bv) +
-                    (select count(*) from user_coin_video where user_coin_video.bv = video_active_super.bv) +
-                    (select count(*) from user_fav_video where user_fav_video.bv = video_active_super.bv) +
+                    (select least(count(*), auxCnt) from user_like_video where user_like_video.bv = video_active_super.bv) +
+                    (select least(count(*), auxCnt) from user_coin_video where user_coin_video.bv = video_active_super.bv) +
+                    (select least(count(*), auxCnt) from user_fav_video where user_fav_video.bv = video_active_super.bv) +
                     (select count(*) from danmu_info where danmu_info.bv = video_active_super.bv) +
                     (select sum(lastpos) from user_watch_video where user_watch_video.bv = video_active_super.bv)
                         / video_active_super.duration
@@ -1155,23 +1141,39 @@ create or replace function recommend_video_for_user (
         if page_size <= 0 or page_num <= 0 then
             raise exception 'Page size or page number is invalid.';
         end if;
-        return query
-        with friends as (
-            select star_mid from user_follow where fan_mid = auth_mid
-            intersect
-            select fan_mid from user_follow where star_mid = auth_mid
-        )
-        select validBv.bv from (
-            select bv, count(*) as cnt from user_watch_video
-                where mid in (select * from friends) and bv not in (
-                    select bv from user_watch_video where mid = auth_mid
-                ) group by bv) validBv
-            join video_active_super on video_active_super.bv = validBv.bv
-            join user_active on user_active.mid = video_active_super.ownMid
-            where (revMid is not null and publicTime <= now()
-                or (select identity from user_active where mid = auth_mid) = 'SUPER')
-            order by cnt desc, level desc, publicTime desc
-            limit page_size offset (page_num - 1) * page_size;
+        if (select identity from user_active where mid = auth_mid) = 'USER' then
+			return query
+	        with friends as (
+	            select star_mid from user_follow where fan_mid = auth_mid
+	            intersect
+	            select fan_mid from user_follow where star_mid = auth_mid
+	        )
+	        select validBv.bv from (
+	            select bv, count(*) as cnt from user_watch_video
+	                where mid in (select * from friends) and bv not in (
+	                    select bv from user_watch_video where mid = auth_mid
+	                ) group by bv) validBv
+	            join video_active_super on video_active_super.bv = validBv.bv
+	            join user_active on user_active.mid = video_active_super.ownMid
+	            order by cnt desc, level desc, publicTime desc
+	            limit page_size offset (page_num - 1) * page_size;
+        else
+            return query
+	        with friends as (
+	            select star_mid from user_follow where fan_mid = auth_mid
+	            intersect
+	            select fan_mid from user_follow where star_mid = auth_mid
+	        )
+	        select validBv.bv from (
+	            select bv, count(*) as cnt from user_watch_video
+	                where mid in (select * from friends) and bv not in (
+	                    select bv from user_watch_video where mid = auth_mid
+	                ) group by bv) validBv
+	            join video_active on video_active.bv = validBv.bv
+	            join user_active on user_active.mid = video_active.ownMid
+	            order by cnt desc, level desc, publicTime desc
+	            limit page_size offset (page_num - 1) * page_size;
+        end if;
     end $$ language plpgsql;
 
 create or replace function recommend_friends (
@@ -1259,6 +1261,14 @@ END $$;
 		}
 	}
 
+	/**
+	 * Sums up two numbers via Postgres.
+	 * This method only demonstrates how to access database via JDBC.
+	 *
+	 * @param a the first number
+	 * @param b the second number
+	 * @return the sum of two numbers
+	 */
 	@Override
 	public Integer sum(int a, int b) {
 		String sql = "SELECT ?+?";

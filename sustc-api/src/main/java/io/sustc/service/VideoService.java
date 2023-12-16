@@ -184,7 +184,7 @@ public interface VideoService {
      * @param auth the current user's authentication information
      * @param bv   the video's {@code bv}
      * @return whether a coin is successfully donated
-     * @implNote There is not way to earn coins in this project for simplicity
+     * @implNote There is no way to earn coins in this project for simplicity
      * @apiNote You may consider the following corner cases:
      * <ul>
      *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>

@@ -33,7 +33,7 @@ public class UserServiceImpl implements UserService {
 	 * <ul>
 	 *   <li>{@code password} or {@code name} or {@code sex} in {@code req} is null or empty</li>
 	 *   <li>{@code birthday} in {@code req} is valid (not null nor empty) while it's not a birthday (X月X日)</li>
-	 *   <li>there is another user with same {@code name} or {@code qq} or {@code wechat} in {@code req}</li>
+	 *   <li>there is another user with same {@code qq} or {@code wechat} in {@code req}</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code -1} shall be returned.
 	 */
@@ -62,11 +62,11 @@ public class UserServiceImpl implements UserService {
 	 * Deletes a user.
 	 *
 	 * @param auth indicates the current user
-	 * @param mid  the user's {@code mid} to be deleted
+	 * @param mid  the user to be deleted
 	 * @return operation success or not
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code mid} is invalid (<= 0 or do not exist)</li>
+	 *   <li>cannot find a user corresponding to the {@code mid}</li>
 	 *   <li>the {@code auth} is invalid
 	 *     <ul>
 	 *       <li>both {@code qq} and {@code wechat} are non-empty while they do not correspond to same user</li>
@@ -97,17 +97,17 @@ public class UserServiceImpl implements UserService {
 		}
 	}
 
-		/**
+	/**
 	 * Follow the user with {@code mid}.
 	 * If that user has already been followed, unfollow the user.
 	 *
-	 * @param auth		the authentication information of the follower
+	 * @param auth        the authentication information of the follower
 	 * @param followeeMid the user who will be followed
-	 * @return operation success or not
+	 * @return the follow state after this operation
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code followeeMid} is invalid (<= 0 or not found)</li>
+	 *   <li>cannot find a user corresponding to the {@code followeeMid}</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
 	 */
@@ -137,7 +137,7 @@ public class UserServiceImpl implements UserService {
 	 * @return the personal information of given {@code mid}
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code mid} is invalid (<= 0 or not found)</li>
+	 *   <li>cannot find a user corresponding to the {@code mid}</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code null} shall be returned.
 	 */

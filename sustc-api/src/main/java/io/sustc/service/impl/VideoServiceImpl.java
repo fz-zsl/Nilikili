@@ -31,12 +31,12 @@ public class VideoServiceImpl implements VideoService {
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
 	 *   <li>{@code req} is invalid
-	 *	 <ul>
-	 *	   <li>{@code title} is null or empty</li>
-	 *	   <li>there is another video with same {@code title} and same user</li>
-	 *	   <li>{@code duration} is less than 10 (so that no chunk can be divided)</li>
-	 *	   <li>{@code publicTime} is earlier than {@link LocalDateTime#now()}</li>
-	 *	 </ul>
+	 *     <ul>
+	 *       <li>{@code title} is null or empty</li>
+	 *       <li>there is another video with same {@code title} and same user</li>
+	 *       <li>{@code duration} is less than 10 (so that no chunk can be divided)</li>
+	 *       <li>{@code publicTime} is earlier than {@link LocalDateTime#now()}</li>
+	 *     </ul>
 	 *   </li>
 	 * </ul>
 	 * If any of the corner case happened, {@code null} shall be returned.
@@ -67,6 +67,7 @@ public class VideoServiceImpl implements VideoService {
 	/**
 	 * Deletes a video.
 	 * This operation can be performed by the video owner or a superuser.
+	 * The coins of this video will not be returned to their donators.
 	 *
 	 * @param auth the current user's authentication information
 	 * @param bv   the video's {@code bv}
@@ -74,7 +75,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>{@code auth} is not the owner of the video nor a superuser</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
@@ -112,7 +113,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>{@code auth} is not the owner of the video</li>
 	 *   <li>{@code req} is invalid, as stated in {@link io.sustc.service.VideoService#postVideo(AuthInfo, PostVideoReq)}</li>
 	 *   <li>{@code duration} in {@code req} is changed compared to current one</li>
@@ -157,8 +158,8 @@ public class VideoServiceImpl implements VideoService {
 	 * <ul>
 	 *   <li>If a keyword occurs multiple times, it should be counted more than once.</li>
 	 *   <li>
-	 *	 A character in these fields can only be counted once for each keyword
-	 *	 but can be counted for different keywords.
+	 *     A character in these fields can only be counted once for each keyword
+	 *     but can be counted for different keywords.
 	 *   </li>
 	 *   <li>If two videos have the same relevance, sort them by the number of views.</li>
 	 * </u
@@ -166,23 +167,23 @@ public class VideoServiceImpl implements VideoService {
 	 * Examples:
 	 * <ol>
 	 *   <li>
-	 *	 If the title is "1122" and the keywords are "11 12",
-	 *	 then the relevance in the title is 2 (one for "11" and one for "12").
+	 *     If the title is "1122" and the keywords are "11 12",
+	 *     then the relevance in the title is 2 (one for "11" and one for "12").
 	 *   </li>
 	 *   <li>
-	 *	 If the title is "111" and the keyword is "11",
-	 *	 then the relevance in the title is 1 (one for the occurrence of "11").
+	 *     If the title is "111" and the keyword is "11",
+	 *     then the relevance in the title is 1 (one for the occurrence of "11").
 	 *   </li>
 	 *   <li>
-	 *	 Consider a video with title "Java Tutorial", description "Basic to Advanced Java", owner name "John Doe".
-	 *	 If the search keywords are "Java Advanced",
-	 *	 then the relevance is 3 (one occurrence in the title and two in the description).
+	 *     Consider a video with title "Java Tutorial", description "Basic to Advanced Java", owner name "John Doe".
+	 *     If the search keywords are "Java Advanced",
+	 *     then the relevance is 3 (one occurrence in the title and two in the description).
 	 *   </li>
 	 * </ol>
 	 * <p>
 	 * Unreviewed or unpublished videos are only visible to superusers or the video owner.
 	 *
-	 * @param auth	 the current user's authentication information
+	 * @param auth     the current user's authentication information
 	 * @param keywords the keywords to search, e.g. "sustech database final review"
 	 * @param pageSize the page size, if there are less than {@code pageSize} videos, return all of them
 	 * @param pageNum  the page number, starts from 1
@@ -191,7 +192,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code keywords} is invalid (null or empty)</li>
+	 *   <li>{@code keywords} is null or empty</li>
 	 *   <li>{@code pageSize} and/or {@code pageNum} is invalid (any of them <= 0)</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code null} shall be returned.
@@ -229,7 +230,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @return the average view rate
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>no one has watched this video</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code -1} shall be returned.
@@ -258,7 +259,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @return the index of hotspot chunks (start from 0)
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>no one has sent danmu on this video</li>
 	 * </ul>
 	 * If any of the corner case happened, an empty set shall be returned.
@@ -292,7 +293,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>{@code auth} is not a superuser or he/she is the owner</li>
 	 *   <li>the video is already reviewed</li>
 	 * </ul>
@@ -322,16 +323,19 @@ public class VideoServiceImpl implements VideoService {
 	 * Donates one coin to the video. A user can at most donate one coin to a video.
 	 * The user can only coin a video if he/she can search it ({@link io.sustc.service.VideoService#searchVideo(AuthInfo, String, int, int)}).
 	 * It is not mandatory that the user shall watch the video first before he/she donates coin to it.
+	 * If the current user donated a coin to this video successfully, he/she's coin number shall be reduced by 1.
+	 * However, the coin number of the owner of the video shall NOT increase.
 	 *
 	 * @param auth the current user's authentication information
 	 * @param bv   the video's {@code bv}
 	 * @return whether a coin is successfully donated
+	 * @implNote There is no way to earn coins in this project for simplicity
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>the user cannot search this video or he/she is the owner</li>
-	 *   <li>the user has no coin or has donated a coin to this video</li>
+	 *   <li>the user has no coin or has donated a coin to this video (user cannot withdraw coin donation)</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
 	 */
@@ -367,7 +371,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>the user cannot search this video or the user is the video owner</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
@@ -404,7 +408,7 @@ public class VideoServiceImpl implements VideoService {
 	 * @apiNote You may consider the following corner cases:
 	 * <ul>
 	 *   <li>{@code auth} is invalid, as stated in {@link io.sustc.service.UserService#deleteAccount(AuthInfo, long)}</li>
-	 *   <li>{@code bv} is invalid (null or empty or not found)</li>
+	 *   <li>cannot find a video corresponding to the {@code bv}</li>
 	 *   <li>the user cannot search this video or the user is the video owner</li>
 	 * </ul>
 	 * If any of the corner case happened, {@code false} shall be returned.
