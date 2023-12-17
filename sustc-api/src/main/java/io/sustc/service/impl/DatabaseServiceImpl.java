@@ -756,9 +756,10 @@ create or replace function search_video(
                 )
             as tmp1) tmp4
         on watch_cnt.bv = tmp4.bv
-        where tmp4.revMid is not null and tmp4.publicTime < now()
+        where (tmp4.revMid is not null and tmp4.publicTime < now()
             or tmp4.ownMid = auth_mid
-            or (select identity from user_active where mid = auth_mid) = 'SUPER'
+            or (select identity from user_active where mid = auth_mid) = 'SUPER')
+            and relevance > 0
         order by relevance desc, cnt desc limit page_size offset ((page_num - 1) * page_size);
     end $$ language plpgsql;
 
@@ -921,7 +922,7 @@ create or replace function like_video(
         return true;
     end $$ language plpgsql;
 
-				create or replace function fav_video(
+create or replace function fav_video(
     auth_mid bigint,
     auth_pwd char(256),
     auth_qqid varchar(20),
