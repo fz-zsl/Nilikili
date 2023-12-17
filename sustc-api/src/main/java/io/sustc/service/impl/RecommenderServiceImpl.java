@@ -35,13 +35,13 @@ public class RecommenderServiceImpl implements RecommenderService {
 	@Override
 	public List<String> recommendNextVideo(String bv) {
 		String recommendSQL = "select recommend_next_video(?)";
-		List<String> result = new ArrayList<>();
+		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getString(1));
+				if (rs.next()) {
+					result = (ArrayList<String>) rs.getArray(1);
 				}
 				return result;
 			}
@@ -82,14 +82,14 @@ public class RecommenderServiceImpl implements RecommenderService {
 	@Override
 	public List<String> generalRecommendations(int pageSize, int pageNum) {
 		String recommendSQL = "select general_recommendations(?, ?)";
-		List<String> result = new ArrayList<>();
+		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setInt(1, pageSize);
 			stmt.setInt(2, (pageNum - 1) * pageSize);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getString(1));
+				if (rs.next()) {
+					result = (ArrayList<String>) rs.getArray(1);
 				}
 				return result;
 			}
@@ -103,7 +103,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 	 * Recommends videos for a user, restricted on their interests.
 	 * The user's interests are defined as the videos that the user's friend(s) have watched,
 	 * filter out the videos that the user has already watched.
-	 * Friend(s) of current user is/are the one(s) who is/are both the current user' follower and followee at the same time.
+	 * Friend(s) of current user is/are the one(s) who is/are both the current user's follower and followee at the same time.
 	 * Sort the videos by:
 	 * <ol>
 	 *   <li>The number of friends who have watched the video</li>
@@ -128,7 +128,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 	@Override
 	public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
 		String recommendSQL = "select recommend_video_for_user(?, ?, ?, ?, ?, ?)";
-		List<String> result = new ArrayList<>();
+		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setLong(1, auth.getMid());
@@ -138,8 +138,8 @@ public class RecommenderServiceImpl implements RecommenderService {
 			stmt.setInt(5, pageSize);
 			stmt.setInt(6, (pageNum - 1) * pageSize);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getString(1));
+				if (rs.next()) {
+					result = (ArrayList<String>) rs.getArray(1);
 				}
 				return result;
 			}
@@ -170,7 +170,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 	@Override
 	public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
 		String recommendSQL = "select recommend_friends(?, ?, ?, ?, ?, ?)";
-		List<Long> result = new ArrayList<>();
+		ArrayList<Long> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setLong(1, auth.getMid());
@@ -180,8 +180,8 @@ public class RecommenderServiceImpl implements RecommenderService {
 			stmt.setInt(5, pageSize);
 			stmt.setInt(6, (pageNum - 1) * pageSize);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getLong(1));
+				if (rs.next()) {
+					result = (ArrayList<Long>) rs.getArray(1);
 				}
 				return result;
 			}

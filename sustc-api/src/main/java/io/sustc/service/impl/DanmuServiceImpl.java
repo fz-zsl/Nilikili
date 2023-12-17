@@ -7,10 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -85,7 +82,7 @@ public class DanmuServiceImpl implements DanmuService {
 	 */
 	@Override
 	public List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter) {
-		List<Long> result = new ArrayList<>();
+		ArrayList<Long> result = new ArrayList<>();
 		String displayDanmuSQL = "select display_danmu(?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(displayDanmuSQL)) {
@@ -94,8 +91,8 @@ public class DanmuServiceImpl implements DanmuService {
 			stmt.setFloat(3, timeEnd);
 			stmt.setBoolean(4, filter);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getLong(1));
+				if (rs.next()) {
+					result = (ArrayList<Long>) rs.getArray(1);
 				}
 			}
 			return result;

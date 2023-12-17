@@ -1042,14 +1042,14 @@ create or replace function display_danmu (
                 select danmu_id, content, postTime from danmu_active
                     where bv = _bv and showTime between start_time and end_time
             )
-            select danmu_id from (
+            select array_agg(danmu_id) from (
                 select danmu_id, postTime,
                     min(posttime) over(partition by content) as firstPosted
                 from allDanmu
             ) as DPP where postTime = firstPosted;
         else
             return query
-            select danmu_id from danmu_active
+            select array_agg(danmu_id) from danmu_active
                 where bv = _bv and showTime between start_time and end_time;
         end if;
     end $$ language plpgsql;
@@ -1091,10 +1091,10 @@ create or replace function recommend_next_video (_bv text)
             raise exception 'Video not found.';
         end if;
         return query
-        select count(bv) as cnt from (
+        select array_agg(bv) as cnt from (
 	        (select mid from user_watch_video where bv = _bv) as watchedBv
             join user_watch_video on watchedBv.mid = user_watch_video.mid)
-		    group by bv order by cnt desc limit 5;
+		    group by bv order by count(bv) desc limit 5;
     end $$ language plpgsql;
 
 create or replace function general_recommendations (
@@ -1110,20 +1110,22 @@ create or replace function general_recommendations (
             return;
         end if;
         return query
-        select bv, (
-            case
-                when (select count(*) as cnt into auxCnt from user_watch_video where bv = video_active_super.bv) = 0
-                    then 0
-                else ((
-                    (select least(count(*), auxCnt) from user_like_video where user_like_video.bv = video_active_super.bv) +
-                    (select least(count(*), auxCnt) from user_coin_video where user_coin_video.bv = video_active_super.bv) +
-                    (select least(count(*), auxCnt) from user_fav_video where user_fav_video.bv = video_active_super.bv) +
-                    (select count(*) from danmu_info where danmu_info.bv = video_active_super.bv) +
-                    (select sum(lastpos) from user_watch_video where user_watch_video.bv = video_active_super.bv)
-                        / video_active_super.duration
-                    ) / auxCnt)
-            end) as score from video_active_super
-            limit page_size offset (page_num - 1) * page_size;
+        select array_agg(bv) from (
+	        select bv, (
+	            case
+	                when (select count(*) as cnt into auxCnt from user_watch_video where bv = video_active_super.bv) = 0
+	                    then 0
+	                else ((
+	                    (select least(count(*), auxCnt) from user_like_video where user_like_video.bv = video_active_super.bv) +
+	                    (select least(count(*), auxCnt) from user_coin_video where user_coin_video.bv = video_active_super.bv) +
+	                    (select least(count(*), auxCnt) from user_fav_video where user_fav_video.bv = video_active_super.bv) +
+	                    (select count(*) from danmu_info where danmu_info.bv = video_active_super.bv) +
+	                    (select sum(lastpos) from user_watch_video where user_watch_video.bv = video_active_super.bv)
+	                        / video_active_super.duration
+	                    ) / auxCnt)
+	            end) as score from video_active_super
+	    ) as tmp order by score desc
+	    limit page_size offset (page_num - 1) * page_size;
     end; $$ language plpgsql;
 
 create or replace function recommend_video_for_user (
@@ -1149,14 +1151,14 @@ create or replace function recommend_video_for_user (
 	            intersect
 	            select fan_mid from user_follow where star_mid = auth_mid
 	        )
-	        select validBv.bv from (
-	            select bv, count(*) as cnt from user_watch_video
-	                where mid in (select * from friends) and bv not in (
-	                    select bv from user_watch_video where mid = auth_mid
-	                ) group by bv) validBv
-	            join video_active_super on video_active_super.bv = validBv.bv
-	            join user_active on user_active.mid = video_active_super.ownMid
-	            order by cnt desc, level desc, publicTime desc
+	        select array_agg(validBv.bv) from (
+                select bv, count(*) as cnt from user_watch_video
+                    where mid in (select * from friends) and bv not in (
+                        select bv from user_watch_video where mid = auth_mid
+                    ) group by bv) validBv
+                join video_active_super on video_active_super.bv = validBv.bv
+                join user_active on user_active.mid = video_active_super.ownMid
+                order by cnt desc, level desc, publicTime desc
 	            limit page_size offset (page_num - 1) * page_size;
         else
             return query
@@ -1165,7 +1167,7 @@ create or replace function recommend_video_for_user (
 	            intersect
 	            select fan_mid from user_follow where star_mid = auth_mid
 	        )
-	        select validBv.bv from (
+	        select array_agg(validBv.bv) from (
 	            select bv, count(*) as cnt from user_watch_video
 	                where mid in (select * from friends) and bv not in (
 	                    select bv from user_watch_video where mid = auth_mid
@@ -1202,7 +1204,7 @@ create or replace function recommend_friends (
                 and fan_mid <> auth_mid
             group by fan_mid
         )
-        select user_active.mid
+        select array_agg(user_active.mid)
             from newFriends join user_active
                 on newFriends.mid = user_active.mid
             order by cnt desc, level desc limit page_size offset (page_num - 1) * page_size;

@@ -211,8 +211,8 @@ public class VideoServiceImpl implements VideoService {
 			stmt.setInt(6, pageSize);
 			stmt.setInt(7, pageNum);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getString(1));
+				if (rs.next()) {
+					result = (ArrayList<String>) rs.getArray(1);
 				}
 				return result;
 			}
@@ -272,8 +272,8 @@ public class VideoServiceImpl implements VideoService {
 			 PreparedStatement stmt = conn.prepareStatement(getHotspotSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					result.add(rs.getInt(1));
+				if (rs.next()) {
+					result = (HashSet) rs.getArray(1);
 				}
 				return result;
 			}
