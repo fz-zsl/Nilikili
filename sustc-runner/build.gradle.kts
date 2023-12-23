@@ -40,3 +40,7 @@ tasks.withType<BootJar> {
     archiveFileName = "sustc-runner.jar"
     destinationDirectory = File("$rootDir/run")
 }
+
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+}

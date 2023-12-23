@@ -82,6 +82,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 	@Override
 	public List<String> generalRecommendations(int pageSize, int pageNum) {
 		String recommendSQL = "select general_recommendations(?, ?)";
+		System.out.println(pageSize + " " + pageNum);
 		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
@@ -89,6 +90,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 			stmt.setInt(2, (pageNum - 1) * pageSize);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
+					System.out.println("???");
 					result = (ArrayList<String>) rs.getArray(1);
 				}
 				return result;

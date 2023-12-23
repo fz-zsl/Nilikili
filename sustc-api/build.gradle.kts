@@ -42,3 +42,7 @@ tasks.register("submitJar") {
 tasks.clean {
     delete(fileTree("$rootDir/submit").matching { include("*.jar") })
 }
+
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+}

@@ -73,15 +73,13 @@ drop table if exists danmu_info;
 drop table if exists video_info;
 drop table if exists user_info;
 
-
-
 -- create tables
 create table user_info (
     mid bigserial not null,
     name text not null,
     sex varchar(10),
     birthday date,
-    level smallint not null default 1,
+    level smallint not null default 0,
     sign text,
     identity varchar(5) not null default 'USER',
     pwd char(256), -- encrypted by SHA256
@@ -155,12 +153,10 @@ create table user_like_danmu (
 		}
 
 		// load user_info
-		String insertUserInfoSQL = """
-insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqid, wxid, coin)
-	values (?, ?, ?, to_date(?, 'MM月DD日'), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?);
-			""";
+		String insertUserInfoSQL = "insert into user_info values (?, ?, ?, to_date(?, 'MM月DD日'), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?, true);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserInfoSQL)) {
+			conn.setAutoCommit(false);
 			for (UserRecord userRecord : userRecords) {
 				stmt.setLong(1, userRecord.getMid());
 				stmt.setString(2, userRecord.getName());
@@ -186,17 +182,17 @@ insert into user_info (mid, name, sex, birthday, level, sign, identity, pwd, qqi
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user records, " + e.getMessage());
 		}
 
 		// load video_info
-		String insertVideoInfoSQL = """
-insert into video_info (bv, title, ownMid, commitTime, revMid, reviewTime, publicTime, duration, descr)
-	values (?, ?, ?, ?, ?, ?, ?, ?, ?);
-		""";
+		String insertVideoInfoSQL = "insert into video_info values (?, ?, ?, ?, ?, ?, ?, ?, ?, true);";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(insertVideoInfoSQL)) {
+			conn.setAutoCommit(false);
 			for (VideoRecord videoRecord : videoRecords) {
 				stmt.setString(1, videoRecord.getBv());
 				stmt.setString(2, videoRecord.getTitle());
@@ -210,17 +206,17 @@ insert into video_info (bv, title, ownMid, commitTime, revMid, reviewTime, publi
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert video records, " + e.getMessage());
 		}
 
 		// load danmu_info
-		String insertDanmuInfoSQL = """
-insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
-	values (?, ?, ?, ?, ?, ?);
-		""";
+		String insertDanmuInfoSQL = "insert into danmu_info values (?, ?, ?, ?, ?, ?, true);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertDanmuInfoSQL)) {
+			conn.setAutoCommit(false);
 			long danmuCnt = 0;
 			for (DanmuRecord danmuRecord : danmuRecords) {
 				danmuRecord.setDanmuId(++danmuCnt);
@@ -233,14 +229,17 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
 		}
 
 		// load user_follow
-		String insertUserFollowSQL = "insert into user_follow (star_mid, fan_mid) values (?, ?);";
+		String insertUserFollowSQL = "insert into user_follow values (?, ?);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+			conn.setAutoCommit(false);
 			for (UserRecord userRecord : userRecords) {
 				stmt.setLong(2, userRecord.getMid());
 				for (Long starMid : userRecord.getFollowing()) {
@@ -249,14 +248,17 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				}
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
 		}
 
 		// load user_watch_video
-		String insertUserWatchVideoSQL = "insert into user_watch_video (mid, bv, lastpos) values (?, ?, ?);";
+		String insertUserWatchVideoSQL = "insert into user_watch_video values (?, ?, ?);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserWatchVideoSQL)) {
+			conn.setAutoCommit(false);
 			for (VideoRecord videoRecord : videoRecords) {
 				stmt.setString(2, videoRecord.getBv());
 				int viewerCnt = videoRecord.getViewerMids().length;
@@ -267,14 +269,17 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				}
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user_watch_video records, " + e.getMessage());
 		}
 
 		// load user_coin_video
-		String insertUserCoinVideoSQL = "insert into user_coin_video (mid, bv) values (?, ?);";
+		String insertUserCoinVideoSQL = "insert into user_coin_video values (?, ?);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserCoinVideoSQL)) {
+			conn.setAutoCommit(false);
 			for (VideoRecord videoRecord : videoRecords) {
 				stmt.setString(2, videoRecord.getBv());
 				for (Long mid : videoRecord.getCoin()) {
@@ -283,14 +288,17 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				}
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user_coin_video records, " + e.getMessage());
 		}
 
 		// load user_like_video
-		String insertUserLikeVideoSQL = "insert into user_like_video (mid, bv) values (?, ?);";
+		String insertUserLikeVideoSQL = "insert into user_like_video values (?, ?);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserLikeVideoSQL)) {
+			conn.setAutoCommit(false);
 			for (VideoRecord videoRecord : videoRecords) {
 				stmt.setString(2, videoRecord.getBv());
 				for (Long mid : videoRecord.getLike()) {
@@ -299,14 +307,17 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				}
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user_like_video records, " + e.getMessage());
 		}
 
 		// load user_fav_video
-		String insertUserFavVideoSQL = "insert into user_fav_video (mid, bv) values (?, ?);";
+		String insertUserFavVideoSQL = "insert into user_fav_video values (?, ?);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserFavVideoSQL)) {
+			conn.setAutoCommit(false);
 			for (VideoRecord videoRecord : videoRecords) {
 				stmt.setString(2, videoRecord.getBv());
 				for (Long mid : videoRecord.getFavorite()) {
@@ -315,14 +326,17 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				}
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user_fav_video records, " + e.getMessage());
 		}
 
 		// load user_like_danmu
-		String insertUserLikeDanmuSQL = "insert into user_like_danmu (danmu_id, mid) values (?, ?);";
+		String insertUserLikeDanmuSQL = "insert into user_like_danmu values (?, ?);";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(insertUserLikeDanmuSQL)) {
+			conn.setAutoCommit(false);
 			for (DanmuRecord danmuRecord : danmuRecords) {
 				stmt.setLong(1, danmuRecord.getDanmuId());
 				for (Long mid : danmuRecord.getLikedBy()) {
@@ -331,6 +345,8 @@ insert into danmu_info (danmu_id, bv, senderMid, showtime, content, posttime)
 				}
 			}
 			stmt.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
 		} catch (SQLException e) {
 			System.out.println("[ERROR] Fail to insert user_like_danmu records, " + e.getMessage());
 		}
@@ -343,37 +359,37 @@ alter table user_info add constraint mid_pk primary key (mid);
 alter table user_info add constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN'));
 alter table user_info add constraint identity_valid check (identity in ('USER', 'SUPER'));
 alter table user_info add constraint coin_non_neg check (coin >= 0);
-alter table user_info add constraint level_valid check (level between 0 and 6); -- from 0 or 1?
+alter table user_info add constraint level_valid check (level between 0 and 6);
 
 alter table video_info add constraint bv_pk primary key (bv);
 
 alter table danmu_info add constraint danmu_id_pk primary key (danmu_id);
-alter table danmu_info add constraint mid_fk foreign key (senderMid) references user_info(mid);
-alter table danmu_info add constraint bv_fk foreign key (bv) references video_info(bv);
+-- alter table danmu_info add constraint mid_fk foreign key (senderMid) references user_info(mid);
+-- alter table danmu_info add constraint bv_fk foreign key (bv) references video_info(bv);
 
 alter table user_follow add constraint user_follow_pk primary key (star_mid, fan_mid);
-alter table user_follow add constraint star_fk foreign key (star_mid) references user_info(mid);
-alter table user_follow add constraint fan_fk foreign key (fan_mid) references user_info(mid);
+-- alter table user_follow add constraint star_fk foreign key (star_mid) references user_info(mid);
+-- alter table user_follow add constraint fan_fk foreign key (fan_mid) references user_info(mid);
 
 alter table user_watch_video add constraint user_watch_video_pk primary key (mid, bv);
-alter table user_watch_video add constraint mid_fk foreign key (mid) references user_info(mid);
-alter table user_watch_video add constraint bv_fk foreign key (bv) references video_info(bv);
+-- alter table user_watch_video add constraint mid_fk foreign key (mid) references user_info(mid);
+-- alter table user_watch_video add constraint bv_fk foreign key (bv) references video_info(bv);
 
 alter table user_coin_video add constraint user_coin_video_pk primary key (mid, bv);
-alter table user_coin_video add constraint mid_fk foreign key (mid) references user_info(mid);
-alter table user_coin_video add constraint bv_fk foreign key (bv) references video_info(bv);
+-- alter table user_coin_video add constraint mid_fk foreign key (mid) references user_info(mid);
+-- alter table user_coin_video add constraint bv_fk foreign key (bv) references video_info(bv);
 
 alter table user_like_video add constraint user_like_video_pk primary key (mid, bv);
-alter table user_like_video add constraint mid_fk foreign key (mid) references user_info(mid);
-alter table user_like_video add constraint bv_fk foreign key (bv) references video_info(bv);
+-- alter table user_like_video add constraint mid_fk foreign key (mid) references user_info(mid);
+-- alter table user_like_video add constraint bv_fk foreign key (bv) references video_info(bv);
 
 alter table user_fav_video add constraint user_fav_video_pk primary key (mid, bv);
-alter table user_fav_video add constraint mid_fk foreign key (mid) references user_info(mid);
-alter table user_fav_video add constraint bv_fk foreign key (bv) references video_info(bv);
+-- alter table user_fav_video add constraint mid_fk foreign key (mid) references user_info(mid);
+-- alter table user_fav_video add constraint bv_fk foreign key (bv) references video_info(bv);
 
 alter table user_like_danmu add constraint user_like_danmu_pk primary key (danmu_id, mid);
-alter table user_like_danmu add constraint mid_fk foreign key (mid) references user_info(mid);
-alter table user_like_danmu add constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id);
+-- alter table user_like_danmu add constraint mid_fk foreign key (mid) references user_info(mid);
+-- alter table user_like_danmu add constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id);
 
 -- create views
 create or replace view user_active as
@@ -1098,34 +1114,38 @@ create or replace function recommend_next_video (_bv text)
     end $$ language plpgsql;
 
 create or replace function general_recommendations (
-    page_size int,
-    page_num int
+	page_size int,
+	page_num int
 )
-    returns table(bv text) as $$
-    declare
-        auxCnt int;
+	returns table(bv varchar(15)[]) as $$
     begin
         if page_size <= 0 or page_num <= 0 then
             raise notice 'Page size or page number is invalid.';
             return;
         end if;
         return query
-        select array_agg(bv) from (
-	        select bv, (
-	            case
-	                when (select count(*) as cnt into auxCnt from user_watch_video where bv = video_active_super.bv) = 0
-	                    then 0
-	                else ((
-	                    (select least(count(*), auxCnt) from user_like_video where user_like_video.bv = video_active_super.bv) +
-	                    (select least(count(*), auxCnt) from user_coin_video where user_coin_video.bv = video_active_super.bv) +
-	                    (select least(count(*), auxCnt) from user_fav_video where user_fav_video.bv = video_active_super.bv) +
-	                    (select count(*) from danmu_info where danmu_info.bv = video_active_super.bv) +
-	                    (select sum(lastpos) from user_watch_video where user_watch_video.bv = video_active_super.bv)
-	                        / video_active_super.duration
-	                    ) / auxCnt)
-	            end) as score from video_active_super
-	    ) as tmp order by score desc
-	    limit page_size offset (page_num - 1) * page_size;
+            with auxCnt as (
+                select user_like_video.bv, count(*) as cnt from user_like_video group by user_like_video.bv
+            )
+            select array_agg(tmp.bv) from (
+                select video_active_super.bv, (
+                    case
+                        when (select cnt from auxCnt where auxCnt.bv = video_active_super.bv) = 0
+                            then 0
+                        else ((
+                            (select least(count(*), (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
+                                from user_like_video where user_like_video.bv = video_active_super.bv) +
+                            (select least(count(*), (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
+                                from user_coin_video where user_coin_video.bv = video_active_super.bv) +
+                            (select least(count(*), (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
+                                from user_fav_video where user_fav_video.bv = video_active_super.bv) +
+                            (select count(*) from danmu_info where danmu_info.bv = video_active_super.bv) +
+                            (select sum(lastpos) from user_watch_video where user_watch_video.bv = video_active_super.bv)
+                                / video_active_super.duration
+                        ) / (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
+                    end) as score from video_active_super order by score desc
+                    limit page_size offset (page_num - 1) * page_size
+            ) as tmp;
     end; $$ language plpgsql;
 
 create or replace function recommend_video_for_user (
