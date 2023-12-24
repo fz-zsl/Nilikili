@@ -10,8 +10,8 @@ plugins {
 
 dependencies {
     implementation(
-            fileTree("$rootDir/submit").matching { include("*.jar") }
-                    .takeIf { !it.isEmpty } ?: project(":sustc-api")
+        fileTree("$rootDir/submit").matching { include("*.jar") }
+            .takeIf { !it.isEmpty } ?: project(":sustc-api")
     )
     runtimeOnly("org.postgresql:postgresql")
 
@@ -21,6 +21,7 @@ dependencies {
 
     implementation(platform("org.springframework.shell:spring-shell-dependencies:2.1.13"))
     implementation("org.springframework.shell:spring-shell-starter")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 }
 
 tasks.withType<JavaExec> {
@@ -32,8 +33,8 @@ tasks.register("benchmark") {
     description = "Run the benchmark script"
 
     tasks.getByName<BootRun>("bootRun")
-            .apply { args("--spring.profiles.active=benchmark") }
-            .let { finalizedBy(it) }
+        .apply { args("--spring.profiles.active=benchmark") }
+        .let { finalizedBy(it) }
 }
 
 tasks.withType<BootJar> {
