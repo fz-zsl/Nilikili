@@ -39,7 +39,7 @@ public class UserServiceImpl implements UserService {
 	 */
 	@Override
 	public long register(RegisterUserReq req) {
-		String userRegisterSQL = "select user_reg(?, ?, ?, ?, ?, ?, ?)";
+		String userRegisterSQL = "select user_reg_sustc(?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(userRegisterSQL)) {
 			stmt.setString(1, req.getName());
@@ -80,7 +80,7 @@ public class UserServiceImpl implements UserService {
 	 */
 	@Override
 	public boolean deleteAccount(AuthInfo auth, long mid) {
-		String userDeleteSQL = "select user_del(?, ?, ?, ?, ?)";
+		String userDeleteSQL = "select user_del_sustc(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(userDeleteSQL)) {
 			stmt.setLong(1, auth.getMid());

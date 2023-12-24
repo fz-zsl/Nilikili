@@ -43,6 +43,251 @@ public class DatabaseServiceImpl implements DatabaseService {
 		return List.of(12212232);
 	}
 
+
+	class ImportThread1 extends Thread {
+		private final List<VideoRecord> videoRecords;
+
+		public ImportThread1(List<VideoRecord> videoRecords) {
+			this.videoRecords = videoRecords;
+		}
+
+		public void run() {
+			// load user_coin_video
+			String insertUserCoinVideoSQL = "insert into user_coin_video values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserCoinVideoSQL)) {
+				conn.setAutoCommit(false);
+				for (VideoRecord videoRecord : videoRecords) {
+					stmt.setString(2, videoRecord.getBv());
+					for (Long mid : videoRecord.getCoin()) {
+						stmt.setLong(1, mid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_coin_video records, " + e.getMessage());
+			}
+
+			// load user_fav_video
+			String insertUserFavVideoSQL = "insert into user_fav_video values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFavVideoSQL)) {
+				conn.setAutoCommit(false);
+				for (VideoRecord videoRecord : videoRecords) {
+					stmt.setString(2, videoRecord.getBv());
+					for (Long mid : videoRecord.getFavorite()) {
+						stmt.setLong(1, mid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_fav_video records, " + e.getMessage());
+			}
+		}
+	}
+
+	class ImportThread2 extends Thread {
+		private final List<VideoRecord> videoRecords;
+
+		public ImportThread2(List<VideoRecord> videoRecords) {
+			this.videoRecords = videoRecords;
+		}
+
+		public void run() {
+			// load user_watch_video
+			String insertUserWatchVideoSQL = "insert into user_watch_video values (?, ?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserWatchVideoSQL)) {
+				conn.setAutoCommit(false);
+				for (VideoRecord videoRecord : videoRecords) {
+					stmt.setString(2, videoRecord.getBv());
+					int viewerCnt = videoRecord.getViewerMids().length;
+					for (int i = 0; i < viewerCnt; i++) {
+						stmt.setLong(1, videoRecord.getViewerMids()[i]);
+						stmt.setFloat(3, videoRecord.getViewTime()[i]);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_watch_video records, " + e.getMessage());
+			}
+		}
+	}
+
+	class ImportThread3 extends Thread {
+		private final List<UserRecord> userRecords;
+
+		public ImportThread3(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (UserRecord userRecord : userRecords) {
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+	class ImportThread4 extends Thread {
+		private final List<UserRecord> userRecords;
+		private final List<VideoRecord> videoRecords;
+		private final List<DanmuRecord> danmuRecords;
+
+		public ImportThread4(List<UserRecord> userRecords, List<VideoRecord> videoRecords, List<DanmuRecord> danmuRecords) {
+			this.userRecords = userRecords;
+			this.videoRecords = videoRecords;
+			this.danmuRecords = danmuRecords;
+		}
+
+		public void run() {
+			// load user_info
+			String insertUserInfoSQL = "insert into user_info values (?, ?, ?, to_date(?, 'MM月DD日'), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?, true);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserInfoSQL)) {
+				conn.setAutoCommit(false);
+				for (UserRecord userRecord : userRecords) {
+					stmt.setLong(1, userRecord.getMid());
+					stmt.setString(2, userRecord.getName());
+					String sexString = userRecord.getSex();
+					if (sexString.equals("男") || sexString.equals("M") || sexString.equals("♂")) {
+						sexString = "MALE";
+					}
+					else if (sexString.equals("女") || sexString.equals("F") || sexString.equals("♀")) {
+						sexString = "FEMALE";
+					}
+					else {
+						sexString = "UNKNOWN";
+					}
+					stmt.setString(3, sexString);
+					stmt.setString(4, userRecord.getBirthday().isEmpty() ? null : userRecord.getBirthday());
+					stmt.setShort(5, userRecord.getLevel());
+					stmt.setString(6, userRecord.getSign());
+					stmt.setString(7, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
+					stmt.setString(8, userRecord.getPassword());
+					stmt.setString(9, userRecord.getQq());
+					stmt.setString(10, userRecord.getWechat());
+					stmt.setInt(11, userRecord.getCoin());
+					stmt.addBatch();
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user records, " + e.getMessage());
+			}
+
+			// load video_info
+			String insertVideoInfoSQL = "insert into video_info values (?, ?, ?, ?, ?, ?, ?, ?, ?, true);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertVideoInfoSQL)) {
+				conn.setAutoCommit(false);
+				for (VideoRecord videoRecord : videoRecords) {
+					stmt.setString(1, videoRecord.getBv());
+					stmt.setString(2, videoRecord.getTitle());
+					stmt.setLong(3, videoRecord.getOwnerMid());
+					stmt.setTimestamp(4, videoRecord.getCommitTime());
+					stmt.setLong(5, videoRecord.getReviewer());
+					stmt.setTimestamp(6, videoRecord.getReviewTime());
+					stmt.setTimestamp(7, videoRecord.getPublicTime());
+					stmt.setFloat(8, videoRecord.getDuration());
+					stmt.setString(9, videoRecord.getDescription());
+					stmt.addBatch();
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert video records, " + e.getMessage());
+			}
+
+			// load danmu_info
+			String insertDanmuInfoSQL = "insert into danmu_info values (?, ?, ?, ?, ?, ?, true);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertDanmuInfoSQL)) {
+				conn.setAutoCommit(false);
+				long danmuCnt = 0;
+				for (DanmuRecord danmuRecord : danmuRecords) {
+					danmuRecord.setDanmuId(++danmuCnt);
+					stmt.setLong(1, danmuCnt);
+					stmt.setString(2, danmuRecord.getBv());
+					stmt.setLong(3, danmuRecord.getMid());
+					stmt.setFloat(4, danmuRecord.getTime());
+					stmt.setString(5, danmuRecord.getContent());
+					stmt.setTimestamp(6, danmuRecord.getPostTime());
+					stmt.addBatch();
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
+			}
+
+			// load user_like_video
+			String insertUserLikeVideoSQL = "insert into user_like_video values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserLikeVideoSQL)) {
+				conn.setAutoCommit(false);
+				for (VideoRecord videoRecord : videoRecords) {
+					stmt.setString(2, videoRecord.getBv());
+					for (Long mid : videoRecord.getLike()) {
+						stmt.setLong(1, mid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_like_video records, " + e.getMessage());
+			}
+
+			// load user_like_danmu
+			String insertUserLikeDanmuSQL = "insert into user_like_danmu values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserLikeDanmuSQL)) {
+				conn.setAutoCommit(false);
+				for (DanmuRecord danmuRecord : danmuRecords) {
+					stmt.setLong(1, danmuRecord.getDanmuId());
+					for (Long mid : danmuRecord.getLikedBy()) {
+						stmt.setLong(2, mid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_like_danmu records, " + e.getMessage());
+			}
+		}
+	}
+
+
 	/**
 	 * Imports data to an empty database.
 	 * Invalid data will not be provided.
@@ -83,14 +328,14 @@ create table user_info (
     sign text,
     identity varchar(5) not null default 'USER',
     pwd char(256), -- encrypted by SHA256
-    qqid varchar(20),
-    wxid varchar(30),
+    qqid varchar(50),
+    wxid varchar(50),
     coin int default 0,
     active boolean default true
 );
 
 create table video_info (
-    bv varchar(15) not null,
+    bv varchar(25) not null,
     title text not null,
     ownMid bigint not null, -- owner's mid
     commitTime timestamp,
@@ -105,7 +350,7 @@ create table video_info (
 
 create table danmu_info (
     danmu_id bigserial not null,
-    bv varchar(15) not null,
+    bv varchar(25) not null,
     senderMid bigint not null,
     showTime float8 not null,
         -- the display time from the start of video (in seconds)
@@ -121,7 +366,7 @@ create table user_follow (
 
 create table user_watch_video (
     mid bigint not null,
-    bv varchar(15) not null,
+    bv varchar(25) not null,
     lastpos float8 not null -- last watch time stamp in seconds
 );
 
@@ -132,12 +377,12 @@ create table user_coin_video (
 
 create table user_like_video (
     mid bigint not null,
-    bv varchar(15) not null
+    bv varchar(25) not null
 );
 
 create table user_fav_video (
     mid bigint not null,
-    bv varchar(15) not null
+    bv varchar(25) not null
 );
 
 create table user_like_danmu (
@@ -152,205 +397,23 @@ create table user_like_danmu (
 			throw new RuntimeException(e);
 		}
 
-		// load user_info
-		String insertUserInfoSQL = "insert into user_info values (?, ?, ?, to_date(?, 'MM月DD日'), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?, true);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserInfoSQL)) {
-			conn.setAutoCommit(false);
-			for (UserRecord userRecord : userRecords) {
-				stmt.setLong(1, userRecord.getMid());
-				stmt.setString(2, userRecord.getName());
-				String sexString = userRecord.getSex();
-				if (sexString.equals("男") || sexString.equals("M") || sexString.equals("♂")) {
-					sexString = "MALE";
-				}
-				else if (sexString.equals("女") || sexString.equals("F") || sexString.equals("♀")) {
-					sexString = "FEMALE";
-				}
-				else {
-					sexString = "UNKNOWN";
-				}
-				stmt.setString(3, sexString);
-				stmt.setString(4, userRecord.getBirthday().isEmpty() ? null : userRecord.getBirthday());
-				stmt.setShort(5, userRecord.getLevel());
-				stmt.setString(6, userRecord.getSign());
-				stmt.setString(7, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
-				stmt.setString(8, userRecord.getPassword());
-				stmt.setString(9, userRecord.getQq());
-				stmt.setString(10, userRecord.getWechat());
-				stmt.setInt(11, userRecord.getCoin());
-				stmt.addBatch();
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user records, " + e.getMessage());
-		}
 
-		// load video_info
-		String insertVideoInfoSQL = "insert into video_info values (?, ?, ?, ?, ?, ?, ?, ?, ?, true);";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(insertVideoInfoSQL)) {
-			conn.setAutoCommit(false);
-			for (VideoRecord videoRecord : videoRecords) {
-				stmt.setString(1, videoRecord.getBv());
-				stmt.setString(2, videoRecord.getTitle());
-				stmt.setLong(3, videoRecord.getOwnerMid());
-				stmt.setTimestamp(4, videoRecord.getCommitTime());
-				stmt.setLong(5, videoRecord.getReviewer());
-				stmt.setTimestamp(6, videoRecord.getReviewTime());
-				stmt.setTimestamp(7, videoRecord.getPublicTime());
-				stmt.setFloat(8, videoRecord.getDuration());
-				stmt.setString(9, videoRecord.getDescription());
-				stmt.addBatch();
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert video records, " + e.getMessage());
+		ImportThread1 importThread1 = new ImportThread1(videoRecords);
+		ImportThread2 importThread2 = new ImportThread2(videoRecords);
+		ImportThread3 importThread3 = new ImportThread3(userRecords);
+		ImportThread4 importThread4 = new ImportThread4(userRecords, videoRecords, danmuRecords);
+		importThread1.start();
+		importThread2.start();
+		importThread3.start();
+		importThread4.start();
+		try {
+			importThread1.join();
+			importThread2.join();
+			importThread3.join();
+			importThread4.join();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
-
-		// load danmu_info
-		String insertDanmuInfoSQL = "insert into danmu_info values (?, ?, ?, ?, ?, ?, true);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertDanmuInfoSQL)) {
-			conn.setAutoCommit(false);
-			long danmuCnt = 0;
-			for (DanmuRecord danmuRecord : danmuRecords) {
-				danmuRecord.setDanmuId(++danmuCnt);
-				stmt.setLong(1, danmuCnt);
-				stmt.setString(2, danmuRecord.getBv());
-				stmt.setLong(3, danmuRecord.getMid());
-				stmt.setFloat(4, danmuRecord.getTime());
-				stmt.setString(5, danmuRecord.getContent());
-				stmt.setTimestamp(6, danmuRecord.getPostTime());
-				stmt.addBatch();
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert danmu records, " + e.getMessage());
-		}
-
-		// load user_follow
-		String insertUserFollowSQL = "insert into user_follow values (?, ?);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
-			conn.setAutoCommit(false);
-			for (UserRecord userRecord : userRecords) {
-				stmt.setLong(2, userRecord.getMid());
-				for (Long starMid : userRecord.getFollowing()) {
-					stmt.setLong(1, starMid);
-					stmt.addBatch();
-				}
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
-		}
-
-		// load user_watch_video
-		String insertUserWatchVideoSQL = "insert into user_watch_video values (?, ?, ?);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserWatchVideoSQL)) {
-			conn.setAutoCommit(false);
-			for (VideoRecord videoRecord : videoRecords) {
-				stmt.setString(2, videoRecord.getBv());
-				int viewerCnt = videoRecord.getViewerMids().length;
-				for (int i = 0; i < viewerCnt; i++) {
-					stmt.setLong(1, videoRecord.getViewerMids()[i]);
-					stmt.setFloat(3, videoRecord.getViewTime()[i]);
-					stmt.addBatch();
-				}
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user_watch_video records, " + e.getMessage());
-		}
-
-		// load user_coin_video
-		String insertUserCoinVideoSQL = "insert into user_coin_video values (?, ?);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserCoinVideoSQL)) {
-			conn.setAutoCommit(false);
-			for (VideoRecord videoRecord : videoRecords) {
-				stmt.setString(2, videoRecord.getBv());
-				for (Long mid : videoRecord.getCoin()) {
-					stmt.setLong(1, mid);
-					stmt.addBatch();
-				}
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user_coin_video records, " + e.getMessage());
-		}
-
-		// load user_like_video
-		String insertUserLikeVideoSQL = "insert into user_like_video values (?, ?);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserLikeVideoSQL)) {
-			conn.setAutoCommit(false);
-			for (VideoRecord videoRecord : videoRecords) {
-				stmt.setString(2, videoRecord.getBv());
-				for (Long mid : videoRecord.getLike()) {
-					stmt.setLong(1, mid);
-					stmt.addBatch();
-				}
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user_like_video records, " + e.getMessage());
-		}
-
-		// load user_fav_video
-		String insertUserFavVideoSQL = "insert into user_fav_video values (?, ?);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserFavVideoSQL)) {
-			conn.setAutoCommit(false);
-			for (VideoRecord videoRecord : videoRecords) {
-				stmt.setString(2, videoRecord.getBv());
-				for (Long mid : videoRecord.getFavorite()) {
-					stmt.setLong(1, mid);
-					stmt.addBatch();
-				}
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user_fav_video records, " + e.getMessage());
-		}
-
-		// load user_like_danmu
-		String insertUserLikeDanmuSQL = "insert into user_like_danmu values (?, ?);";
-		try (Connection conn = dataSource.getConnection();
-			PreparedStatement stmt = conn.prepareStatement(insertUserLikeDanmuSQL)) {
-			conn.setAutoCommit(false);
-			for (DanmuRecord danmuRecord : danmuRecords) {
-				stmt.setLong(1, danmuRecord.getDanmuId());
-				for (Long mid : danmuRecord.getLikedBy()) {
-					stmt.setLong(2, mid);
-					stmt.addBatch();
-				}
-			}
-			stmt.executeBatch();
-			conn.commit();
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			System.out.println("[ERROR] Fail to insert user_like_danmu records, " + e.getMessage());
-		}
-
 
 
 		String createFunctions = """
@@ -405,28 +468,58 @@ create or replace view video_active_super as
 create or replace view danmu_active as
 	select * from danmu_info where active = true;
 
-
+-- drop all functions
+drop function if exists verify_auth;
+drop function if exists verify_video_req;
+drop function if exists user_reg_check;
+drop function if exists user_reg_sustc;
+drop function if exists user_del_sustc;
+drop function if exists add_follow;
+drop function if exists generate_unique_bv;
+drop function if exists post_video;
+drop function if exists del_video;
+drop function if exists update_video;
+drop function if exists search_video;
+drop function if exists get_avg_view_rate;
+drop function if exists get_hotspot;
+drop function if exists rev_video;
+drop function if exists coin_video;
+drop function if exists like_video;
+drop function if exists fav_video;
+drop function if exists send_danmu;
+drop function if exists display_danmu;
+drop function if exists like_danmu;
+drop function if exists recommend_next_video;
+drop function if exists general_recommendations;
+drop function if exists recommend_video_for_user;
+drop function if exists recommend_friends;
 
 -- function for VerifyAuth
 create extension if not exists pgcrypto;
 
 create or replace function verify_auth(
     _mid bigint,
-    _pwd text,
-    _qqid text,
-    _wxid text
+    _pwd varchar(260),
+    _qqid varchar(50),
+    _wxid varchar(50)
 )
     returns bigint as $$
-        declare
-            mid_mid bigint;
-            qqid_mid bigint;
-            wxid_mid bigint;
+    declare
+        pwd_256 char(256);
+        mid_mid bigint;
+        qqid_mid bigint;
+        wxid_mid bigint;
     begin
-        mid_mid := (
-            select mid from user_active
-                where user_active.mid = _mid
-                    and user_active.pwd = digest(_pwd, 'sha256')
-        );
+        if (_mid <= 0 or _pwd is null or _pwd = '') then
+			mid_mid := -1;
+        else
+            pwd_256 := cast(digest(_pwd, 'sha256') as char(256));
+            mid_mid := (
+	            select mid from user_active
+	                where user_active.mid = _mid
+	                    and user_active.pwd = pwd_256
+	        );
+	    end if;
         if (_qqid is null or _qqid = '') then
             qqid_mid := null;
 		else
@@ -443,7 +536,7 @@ create or replace function verify_auth(
 	                where user_active.wxid = _wxid
 	        );
 	    end if;
-        if _qqid is not null and _wxid is not null
+        if qqid_mid is not null and wxid_mid is not null
             and qqid_mid <> wxid_mid then
             raise notice 'OIDC via QQ and WeChat contradicts.';
             return -1;
@@ -537,14 +630,14 @@ create or replace function user_reg_check()
         return new;
     end $$ language plpgsql;
 
-create or replace function user_reg(
+create or replace function user_reg_sustc(
     _name text,
     _sex text,
     _birthday text,
     _sign text,
     _pwd text,
-    _qqid varchar(20),
-    _wxid varchar(30)
+    _qqid varchar(50),
+    _wxid varchar(50)
 )
     returns bigint as $$
     declare
@@ -564,11 +657,11 @@ create or replace function user_reg(
 		return id;
     end $$ language plpgsql;
 
-create or replace function user_del(
+create or replace function user_del_sustc(
     auth_mid bigint,
     auth_pwd text,
-    auth_qqid text,
-    auth_wxid text,
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     _mid bigint
 )
     returns boolean as $$
@@ -597,8 +690,8 @@ create or replace function user_del(
 create or replace function add_follow(
     auth_mid bigint,
     auth_pwd text,
-    auth_qqid text,
-    auth_wxid text,
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     followee_mid bigint
 )
     returns boolean as $$
@@ -638,14 +731,14 @@ create or replace function generate_unique_bv() returns text as $$
 create or replace function post_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     _title text,
     _descr text,
     _duration float8,
     _publicTime timestamp
 )
-    returns varchar(15) as $$
+    returns varchar(25) as $$
     declare
         bv text;
     begin
@@ -666,9 +759,9 @@ create or replace function post_video(
 create or replace function del_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15)
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25)
 )
     returns boolean as $$
     begin
@@ -692,9 +785,9 @@ create or replace function del_video(
 create or replace function update_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25),
     _title text,
     _descr text,
     _duration float8,
@@ -736,50 +829,55 @@ create or replace function update_video(
 
 create or replace function search_video(
     auth_mid bigint,
-    auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
+    auth_pwd varchar(260),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     keywords text,
     page_size int,
     page_num int
 )
-    returns table(bv text) as $$
+    returns table(bv varchar(25)) as $$
     begin
         if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise exception 'Authentication failed.';
+            raise notice 'Authentication failed.';
+            return query select bv where false;
         end if;
         if keywords is null or keywords = '' then
-            raise exception 'No keyword provided.';
-        end if;
-        if page_size <= 0 or page_num <= 0 then
-            raise exception 'Invalid page size or page num.';
+            raise notice 'No keyword provided.';
+            return query select bv where false;
         end if;
         return query
-        select watch_cnt.bv from
-            (select bv, count(*) as cnt
-                from user_watch_video group by bv
-            ) as watch_cnt
-        join
-            (select bv, revMid, publicTime, ownMid, (
-                array_length(regexp_matches(tmp1.title, word, 'g'), 1) +
-                array_length(regexp_matches(tmp1.descr, word, 'g'), 1) +
-                array_length(regexp_matches(tmp1.name, word, 'g'), 1)
-            ) as relevance
-                from (
-                    (select bv, title, descr, ownMid, name, revMid, publicTime
-                        from (video_active_super join user_active on ownMid = mid)) tmp2
-                    cross join (SELECT regexp_split_to_table(keywords, E'\\s+') as word) tmp3
-                )
-            as tmp1) tmp4
-        on watch_cnt.bv = tmp4.bv
-        where (tmp4.revMid is not null and tmp4.publicTime < now()
-            or tmp4.ownMid = auth_mid
-            or (select identity from user_active where mid = auth_mid) = 'SUPER')
-            and relevance > 0
-        order by relevance desc, cnt desc limit page_size offset ((page_num - 1) * page_size);
+	        with word_set as (
+	            select regexp_split_to_table(keywords, E'\\s+') as word
+	        )
+	        select watch_cnt.bv from
+	            (select user_watch_video.bv, count(*) as cnt
+	                from user_watch_video group by user_watch_video.bv
+	            ) as watch_cnt
+	        join
+	            (select tmp1.bv, revMid, publicTime, ownMid, sum(
+		                (case when (select regexp_matches(tmp1.title, word, 'g')) is not null
+		                    then (select array_length(regexp_matches(tmp1.title, word, 'g'), 1) as arr_len limit 1) else 0 end) +
+		                (case when (select regexp_matches(tmp1.descr, word, 'g')) is not null
+		                    then (select array_length(regexp_matches(tmp1.descr, word, 'g'), 1) as arr_len limit 1) else 0 end) +
+		                (case when (select regexp_matches(tmp1.name, word, 'g')) is not null
+		                    then (select array_length(regexp_matches(tmp1.name, word, 'g'), 1) as arr_len limit 1) else 0 end)
+		            ) as relevance
+	                from (
+	                    (select video_active_super.bv, title, descr, ownMid, name, revMid, publicTime
+	                        from (video_active_super join user_active on ownMid = mid)) tmp2
+	                    join word_set on true
+	                ) as tmp1 group by tmp1.bv, revMid, publicTime, ownMid
+	            ) tmp4
+	        on watch_cnt.bv = tmp4.bv
+	        where (tmp4.revMid is not null and tmp4.publicTime < now()
+	            or tmp4.ownMid = auth_mid
+	            or (select identity from user_active where mid = auth_mid) = 'SUPER')
+	            and relevance > 0
+	        order by relevance desc, cnt desc limit page_size offset ((page_num - 1) * page_size);
     end $$ language plpgsql;
 
-create or replace function get_avg_view_rate(_bv varchar(15))
+create or replace function get_avg_view_rate(_bv varchar(25))
     returns double precision as $$
     declare
         _cnt int;
@@ -797,7 +895,7 @@ create or replace function get_avg_view_rate(_bv varchar(15))
         return _avg / (select duration from video_active_super where bv = _bv);
     end $$ language plpgsql;
 
-create or replace function get_hotspot(_bv varchar(15))
+create or replace function get_hotspot(_bv varchar(25))
     returns table(chunkId int) as $$
     begin
         if (select count(*) from video_active_super where bv = _bv) = 0 then
@@ -815,9 +913,9 @@ create or replace function get_hotspot(_bv varchar(15))
 create or replace function rev_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15)
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25)
 )
     returns boolean as $$
     declare
@@ -859,9 +957,9 @@ create or replace function rev_video(
 create or replace function coin_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15)
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25)
 )
     returns boolean as $$
     declare
@@ -900,9 +998,9 @@ create or replace function coin_video(
 create or replace function like_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15)
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25)
 )
     returns boolean as $$
     declare
@@ -941,9 +1039,9 @@ create or replace function like_video(
 create or replace function fav_video(
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15)
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25)
 				)
     returns boolean as $$
     declare
@@ -985,9 +1083,9 @@ create or replace function fav_video(
 create or replace function send_danmu (
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
-    _bv varchar(15),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
+    _bv varchar(25),
     _content text,
     show_time float8
 )
@@ -1073,8 +1171,8 @@ create or replace function display_danmu (
 create or replace function like_danmu (
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     _danmu_id bigint
 )
     returns boolean as $$
@@ -1117,7 +1215,7 @@ create or replace function general_recommendations (
 	page_size int,
 	page_num int
 )
-	returns table(bv varchar(15)[]) as $$
+	returns table(bv varchar(25)[]) as $$
     begin
         if page_size <= 0 or page_num <= 0 then
             raise notice 'Page size or page number is invalid.';
@@ -1151,8 +1249,8 @@ create or replace function general_recommendations (
 create or replace function recommend_video_for_user (
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     page_size int,
     page_num int
 )
@@ -1202,8 +1300,8 @@ create or replace function recommend_video_for_user (
 create or replace function recommend_friends (
     auth_mid bigint,
     auth_pwd char(256),
-    auth_qqid varchar(20),
-    auth_wxid varchar(30),
+    auth_qqid varchar(50),
+    auth_wxid varchar(50),
     page_size int,
     page_num int
 )
@@ -1231,7 +1329,7 @@ create or replace function recommend_friends (
     end; $$ language plpgsql;
 		""";
 		try (Connection conn = dataSource.getConnection();
-				PreparedStatement stmt = conn.prepareStatement(createFunctions)) {
+			PreparedStatement stmt = conn.prepareStatement(createFunctions)) {
 			stmt.executeUpdate();
 		} catch (SQLException e) {
 			throw new RuntimeException(e);

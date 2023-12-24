@@ -43,13 +43,14 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public String postVideo(AuthInfo auth, PostVideoReq req) {
+		System.out.println("Test postVideo");
 		String postVideoSQL = "select post_video(?, ?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(postVideoSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getPassword());
-			stmt.setString(3, auth.getQq());
-			stmt.setString(4, auth.getWechat());
+			stmt.setString(2, auth.getPassword() == null ? "" : auth.getPassword());
+			stmt.setString(3, auth.getQq() == null ? "" : auth.getQq());
+			stmt.setString(4, auth.getWechat() == null ? "" : auth.getWechat());
 			stmt.setString(5, req.getTitle());
 			stmt.setString(6, req.getDescription());
 			stmt.setFloat(7, req.getDuration());
@@ -82,13 +83,14 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public boolean deleteVideo(AuthInfo auth, String bv) {
+		System.out.println("Test deleteVideo");
 		String deleteVideoSQL = "select del_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(deleteVideoSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getPassword());
-			stmt.setString(3, auth.getQq());
-			stmt.setString(4, auth.getWechat());
+			stmt.setString(2, auth.getPassword() == null ? "" : auth.getPassword());
+			stmt.setString(3, auth.getQq() == null ? "" : auth.getQq());
+			stmt.setString(4, auth.getWechat() == null ? "" : auth.getWechat());
 			stmt.setString(5, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				rs.next();
@@ -123,13 +125,14 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
+		System.out.println("Test updateVideoInfo");
 		String updateVideoInfoSQL = "select update_video(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(updateVideoInfoSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getPassword());
-			stmt.setString(3, auth.getQq());
-			stmt.setString(4, auth.getWechat());
+			stmt.setString(2, auth.getPassword() == null ? "" : auth.getPassword());
+			stmt.setString(3, auth.getQq() == null ? "" : auth.getQq());
+			stmt.setString(4, auth.getWechat() == null ? "" : auth.getWechat());
 			stmt.setString(5, bv);
 			stmt.setString(6, req.getTitle());
 			stmt.setString(7, req.getDescription());
@@ -199,17 +202,22 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
+//		System.out.println("Test searchVideo: " + auth.getMid() + " ; " + auth.getPassword() + " ; " + auth.getQq() + " ; " + auth.getWechat() + " ; " + keywords + " ; " + pageSize + " ; " + pageNum);
 		List<String> result = new ArrayList<>();
-		String searchVideoSQL = "select bv from search_video(?, ?, ?, ?, ?, ?, ?)";
+		if (pageNum <= 0 || pageSize <= 0) {
+			return result;
+		}
+		String searchVideoSQL = "select search_video(?, ?, ?, ?, cast(? as text), ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(searchVideoSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getPassword());
-			stmt.setString(3, auth.getQq());
-			stmt.setString(4, auth.getWechat());
-			stmt.setString(5, keywords);
+			stmt.setString(2, auth.getPassword() == null ? "" : auth.getPassword());
+			stmt.setString(3, auth.getQq() == null ? "" : auth.getQq());
+			stmt.setString(4, auth.getWechat() == null ? "" : auth.getWechat());
+			stmt.setString(5, keywords == null ? "" : keywords);
 			stmt.setInt(6, pageSize);
 			stmt.setInt(7, pageNum);
+//			System.out.println("[Testing search video] " + stmt);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
 					result = (ArrayList<String>) rs.getArray(1);
@@ -237,6 +245,7 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public double getAverageViewRate(String bv) {
+//		System.out.println("Test getAverageViewRate");
 		String getAverageViewRateSQL = "select get_avg_view_rate(?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(getAverageViewRateSQL)) {

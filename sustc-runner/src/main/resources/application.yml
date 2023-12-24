@@ -4,8 +4,13 @@ spring:
     username: sustcadmin  # change this to your own username (avoid using a superuser)
     password: sustcpwd  # change this to your own password
 
+logging:
+  level:
+    root: off
+    io.sustc: debug
+
 ---
 
 benchmark:
-  data-path: data
+  data-path: small_data
   student-mode: true
