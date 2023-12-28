@@ -165,25 +165,16 @@ public class DatabaseServiceImpl implements DatabaseService {
 
 		public void run() {
 			// load user_info
-			String insertUserInfoSQL = "insert into user_info values (?, ?, ?, to_date(?, 'MM月DD日'), ?, ?, ?, digest(?, 'sha256'), ?, ?, ?, true);";
+			String insertUserInfoSQL = "insert into user_info values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true);";
+			// digest(?, 'sha256')
 			try (Connection conn = dataSource.getConnection();
 			     PreparedStatement stmt = conn.prepareStatement(insertUserInfoSQL)) {
 				conn.setAutoCommit(false);
 				for (UserRecord userRecord : userRecords) {
 					stmt.setLong(1, userRecord.getMid());
 					stmt.setString(2, userRecord.getName());
-					String sexString = userRecord.getSex();
-					if (sexString.equals("男") || sexString.equals("M") || sexString.equals("♂")) {
-						sexString = "MALE";
-					}
-					else if (sexString.equals("女") || sexString.equals("F") || sexString.equals("♀")) {
-						sexString = "FEMALE";
-					}
-					else {
-						sexString = "UNKNOWN";
-					}
-					stmt.setString(3, sexString);
-					stmt.setString(4, userRecord.getBirthday().isEmpty() ? null : userRecord.getBirthday());
+					stmt.setString(3, userRecord.getSex());
+					stmt.setString(4, userRecord.getBirthday());
 					stmt.setShort(5, userRecord.getLevel());
 					stmt.setString(6, userRecord.getSign());
 					stmt.setString(7, userRecord.getIdentity().name().equals("USER") ? "USER" : "SUPER");
@@ -201,7 +192,10 @@ public class DatabaseServiceImpl implements DatabaseService {
 			}
 
 			// load video_info
-			String insertVideoInfoSQL = "insert into video_info values (?, ?, ?, ?, ?, ?, ?, ?, ?, true);";
+			String insertVideoInfoSQL = """
+insert into video_info (bv, title, ownMid, commitTime, revMid, reviewTime, publicTime, duration, descr)
+	values (?, ?, ?, ?, ?, ?, ?, ?, ?);
+			""";
 			try (Connection conn = dataSource.getConnection();
 			     PreparedStatement stmt = conn.prepareStatement(insertVideoInfoSQL)) {
 				conn.setAutoCommit(false);
@@ -323,7 +317,7 @@ create table user_info (
     mid bigserial not null,
     name text not null,
     sex varchar(10),
-    birthday date,
+    birthday varchar(10),
     level smallint not null default 0,
     sign text,
     identity varchar(5) not null default 'USER',
@@ -419,7 +413,7 @@ create table user_like_danmu (
 		String createFunctions = """
 -- add keys and constraints
 alter table user_info add constraint mid_pk primary key (mid);
-alter table user_info add constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN'));
+-- alter table user_info add constraint sex_valid check (sex in ('MALE', 'FEMALE', 'UNKNOWN'));
 alter table user_info add constraint identity_valid check (identity in ('USER', 'SUPER'));
 alter table user_info add constraint coin_non_neg check (coin >= 0);
 alter table user_info add constraint level_valid check (level between 0 and 6);
@@ -454,6 +448,18 @@ alter table user_like_danmu add constraint user_like_danmu_pk primary key (danmu
 -- alter table user_like_danmu add constraint mid_fk foreign key (mid) references user_info(mid);
 -- alter table user_like_danmu add constraint did_fk foreign key (danmu_id) references danmu_info(danmu_id);
 
+alter sequence user_info_mid_seq restart with 10000000;
+alter sequence danmu_info_danmu_id_seq restart with 10000000;
+
+-- create index
+create index user_info_name_idx on user_info (name);
+create index user_info_qqid_idx on user_info (qqid);
+create index user_info_wxid_idx on user_info (wxid);
+create index video_info_title_idx on video_info (title);
+create index video_info_ownMid_idx on video_info (ownMid);
+create index danmu_info_bv_idx on danmu_info (bv);
+
+
 -- create views
 create or replace view user_active as
 	select * from user_info where active = true;
@@ -471,10 +477,11 @@ create or replace view danmu_active as
 -- drop all functions
 drop function if exists verify_auth;
 drop function if exists verify_video_req;
-drop function if exists user_reg_check;
+-- drop function if exists user_reg_check;
 drop function if exists user_reg_sustc;
 drop function if exists user_del_sustc;
 drop function if exists add_follow;
+drop function if exists get_user_info;
 drop function if exists generate_unique_bv;
 drop function if exists post_video;
 drop function if exists del_video;
@@ -495,7 +502,7 @@ drop function if exists recommend_video_for_user;
 drop function if exists recommend_friends;
 
 -- function for VerifyAuth
-create extension if not exists pgcrypto;
+-- create extension if not exists pgcrypto;
 
 create or replace function verify_auth(
     _mid bigint,
@@ -505,19 +512,19 @@ create or replace function verify_auth(
 )
     returns bigint as $$
     declare
-        pwd_256 char(256);
+        -- pwd_256 char(256);
         mid_mid bigint;
         qqid_mid bigint;
         wxid_mid bigint;
     begin
         if (_mid <= 0 or _pwd is null or _pwd = '') then
-			mid_mid := -1;
+			mid_mid := null;
         else
-            pwd_256 := cast(digest(_pwd, 'sha256') as char(256));
+            -- pwd_256 := cast(digest(_pwd, 'sha256') as char(256));
             mid_mid := (
 	            select mid from user_active
 	                where user_active.mid = _mid
-	                    and user_active.pwd = pwd_256
+	                    and user_active.pwd = _pwd -- pwd_256
 	        );
 	    end if;
         if (_qqid is null or _qqid = '') then
@@ -538,11 +545,11 @@ create or replace function verify_auth(
 	    end if;
         if qqid_mid is not null and wxid_mid is not null
             and qqid_mid <> wxid_mid then
-            raise notice 'OIDC via QQ and WeChat contradicts.';
+            -- raise notice 'OIDC via QQ and WeChat contradicts.';
             return -1;
         end if;
         if mid_mid is null and qqid_mid is null and wxid_mid is null then
-            raise notice 'Authentication failed.';
+            -- raise notice 'Authentication failed.';
             return -1;
         end if;
         if mid_mid is not null then
@@ -563,95 +570,115 @@ create or replace function verify_video_req(
     _title text,
     _duration float8,
     _publicTime timestamp,
-    _auth_mid bigint
+    _auth_mid bigint,
+    _bv varchar(25)
 )
     returns boolean as $$
     begin
         if _title is null or _title = '' then
-            raise notice 'Title is null or empty.';
+            -- raise notice 'Title is null or empty.';
             return false;
         end if;
         if _duration < 10 then
-            raise notice 'Duration is less than 10 seconds.';
+            -- raise notice 'Duration is less than 10 seconds.';
             return false;
         end if;
-        if _publicTime is not null and _publicTime < now() then
-            raise notice 'Publish time before current time.';
+        if _publicTime is null or _publicTime < now() then
+            -- raise notice 'Publish time before current time.';
             return false;
         end if;
-        if (select count(*) from video_active_super
+        if exists(select 1 from video_active_super
             where video_active_super.title = _title
                 and video_active_super.ownMid = _auth_mid
-            ) > 0 then
-            raise notice 'Title already exists.';
+                and video_active_super.bv <> _bv) then
+            -- raise notice 'Title already exists.';
             return false;
         end if;
         return true;
     end $$ language plpgsql;
 
 -- functions for UserServiceImpl
-create or replace function user_reg_check()
-    returns trigger as $$
-    begin
-        if new.name is null or new.name = '' then
-            raise notice 'Name cannot be null or empty.';
-            return NULL;
-        end if;
-        if new.pwd is null or new.pwd = '' then
-            raise notice 'Password cannot be null or empty.';
-            return NULL;
-        end if;
-        new.pwd := digest(new.pwd, 'sha256');
-        if new.sex is null then
-            raise notice 'Sex cannot be null.';
-            return NULL;
-        end if;
-        if upper(new.sex) = 'M' or new.sex = '男'
-            or upper(new.sex) = 'MALE' or new.sex = '♂' then
-            new.sex := 'MALE';
-        elsif upper(new.sex) = 'F' or new.sex = '女'
-            or upper(new.sex) = 'FEMALE' or new.sex = '♀' then
-            new.sex := 'FEMALE';
-        else
-            new.sex := 'UNKNOWN';
-        end if;
-        if (select count(*) from user_active where user_active.name = new.name) > 0 then
-            raise notice 'Username used.';
-            return NULL;
-        end if;
-        if (select count(*) from user_active where user_active.qqid = new.qqid) > 0 then
-            raise notice 'QQ used.';
-            return NULL;
-        end if;
-        if (select count(*) from user_active where user_active.wxid = new.wxid) > 0 then
-            raise notice 'WeChat used.';
-            return NULL;
-        end if;
-        return new;
-    end $$ language plpgsql;
 
 create or replace function user_reg_sustc(
     _name text,
-    _sex text,
-    _birthday text,
+    _sex varchar(10),
+    _birthday varchar(10),
     _sign text,
-    _pwd text,
+    _pwd varchar(260),
     _qqid varchar(50),
     _wxid varchar(50)
 )
     returns bigint as $$
     declare
         id bigint;
+	    __birthday date;
+		month int;
+		day int;
     begin
+        if _name is null or _name = '' then
+            -- raise notice 'Name cannot be null or empty.';
+            return -1;
+        end if;
+        if _pwd is null or _pwd = '' then
+            -- raise notice 'Password cannot be null or empty.';
+            return -2;
+        end if;
+        -- new.pwd := digest(new.pwd, 'sha256');
+        if _sex is null or _sex = '' then
+            -- raise notice 'Sex cannot be null.';
+            return -3;
+        end if;
+		if _birthday is not null and not (_birthday ~ '^\\d{1,2}月\\d{1,2}日$') then
+			-- raise notice 'Birthday format error.';
+			return -4;
+		end if;
+        if (_birthday is not null and _birthday <> '') then
+			begin
+				__birthday := to_date(_birthday, 'MM月DD日');
+			exception when others then
+				-- raise notice 'Birthday format error.';
+				return -5;
+			end;
+		end if;
+		month := extract(month from __birthday);
+		day := extract(day from __birthday);
+		if month not between 1 and 12 then
+			-- raise notice 'Birthday format error.';
+			return -6;
+		end if;
+		if month = 1 or month = 3 or month = 5 or month = 7 or month = 8 or month = 10 or month = 12 then
+			if day not between 1 and 31 then
+				-- raise notice 'Birthday format error.';
+				return -7;
+			end if;
+		elsif month = 4 or month = 6 or month = 9 or month = 11 then
+			if day not between 1 and 30 then
+				-- raise notice 'Birthday format error.';
+				return -8;
+			end if;
+		else
+			if day not between 1 and 29 then
+				-- raise notice 'Birthday format error.';
+				return -9;
+			end if;
+		end if;
+        if _qqid is not null and _qqid <> '' and exists(select 1 from user_active where user_active.qqid = _qqid) then
+            -- raise notice 'QQ used.';
+            return -10;
+        end if;
+        if _wxid is not null and _wxid <> '' and exists(select 1 from user_active where user_active.wxid = _wxid) then
+            -- raise notice 'WeChat used.';
+            return -11;
+        end if;
         begin
 	        insert into user_info (name, sex, birthday, sign, pwd, qqid, wxid)
 	            values (_name, _sex, _birthday, _sign, _pwd, _qqid, _wxid);
         exception when others then
-            raise notice 'User registration failed.';
-            return -1;
+            -- raise notice 'User registration failed.';
+            return -12;
         end;
         id := (
-			select mid from user_active
+			select max(mid) from user_active
 				where user_active.name = _name
 		);
 		return id;
@@ -665,17 +692,20 @@ create or replace function user_del_sustc(
     _mid bigint
 )
     returns boolean as $$
+    declare
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
         if (select count(*) from user_active where user_active.mid = _mid) = 0 then
-            raise notice 'User not found.';
+            -- raise notice 'User not found.';
             return false;
         end if;
-        if auth_mid = _mid or
-            ((select identity from user_active where user_active.mid = auth_mid) = 'SUPER')
+        if real_mid = _mid or
+            ((select identity from user_active where user_active.mid = real_mid) = 'SUPER')
             and ((select identity from user_active where user_active.mid = _mid) = 'USER') then
             update user_info set active = false where user_info.mid = _mid;
             update video_info set active = false where video_info.ownMid = _mid;
@@ -685,32 +715,58 @@ create or replace function user_del_sustc(
             update danmu_info set active = false where senderMid = _mid;
             return true;
         end if;
+        return false;
     end $$ language plpgsql;
 
 create or replace function add_follow(
     auth_mid bigint,
-    auth_pwd text,
+    auth_pwd varchar(260),
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     followee_mid bigint
 )
     returns boolean as $$
+    declare
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 or real_mid = followee_mid then
             return false;
         end if;
-        if (select count(*) from user_active where user_active.mid = followee_mid) = 0 then
-			raise notice 'Followee not found.';
+        if not exists(select 1 from user_active where user_active.mid = followee_mid) then
+			-- raise notice 'Followee not found.';
 			return false;
 		end if;
-		begin
-			insert into user_follow (star_mid, fan_mid) values (followee_mid, auth_mid);
-		exception when others then
-			raise notice 'Followee already followed.';
+		if exists(select 1 from user_follow where star_mid = followee_mid and fan_mid = real_mid) then
+			-- raise notice 'Followee already followed.';
+			delete from user_follow where star_mid = followee_mid and fan_mid = real_mid;
+			return false;
+		else
+			insert into user_follow (star_mid, fan_mid) values (followee_mid, real_mid);
 			return true;
-		end;
-		return true;
+		end if;
+	end $$ language plpgsql;
+
+create or replace function get_user_info (_mid bigint) returns table(
+	_coin int,
+	following bigint[],
+	follower bigint[],
+	watched varchar(25)[],
+	liked varchar(25)[],
+	faved varchar(25)[],
+	posted varchar(25)[]
+) as $$
+	begin
+		return query
+		select
+			(select user_active.coin from user_active where user_active.mid = _mid) as _coin,
+			(select array_agg(star_mid) from user_follow where fan_mid = _mid and star_mid in (select user_active.mid from user_active)) as following,
+			(select array_agg(fan_mid) from user_follow where star_mid = _mid and fan_mid in (select user_active.mid from user_active)) as follower,
+			(select array_agg(bv) from user_watch_video where user_watch_video.mid = _mid) as watched,
+			(select array_agg(bv) from user_like_video where user_like_video.mid = _mid) as liked,
+			(select array_agg(bv) from user_fav_video where user_fav_video.mid = _mid) as faved,
+			(select array_agg(bv) from video_info where ownMid = _mid) as posted
+		from user_active where user_active.mid = _mid;
 	end $$ language plpgsql;
 
 
@@ -721,8 +777,8 @@ create or replace function generate_unique_bv() returns text as $$
         new_uuid text;
 	begin
 	    loop
-	        new_uuid := substring(gen_random_uuid()::text FROM 1 FOR 10);
-	        if not exists (select 1 from video_info where bv = new_uuid) then
+	        new_uuid := substring(gen_random_uuid()::text FROM 1 FOR 15);
+	        if not exists(select 1 from video_info where bv = new_uuid) then
 	            return 'BV' || new_uuid;
 	        end if;
 	    end loop;
@@ -730,7 +786,7 @@ create or replace function generate_unique_bv() returns text as $$
 
 create or replace function post_video(
     auth_mid bigint,
-    auth_pwd char(256),
+    auth_pwd varchar(260),
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     _title text,
@@ -741,18 +797,20 @@ create or replace function post_video(
     returns varchar(25) as $$
     declare
         bv text;
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return null;
         end if;
-        if not verify_video_req(_title, _duration, _publicTime, auth_mid) then
-            raise notice 'Video verification failed.';
+        if not verify_video_req(_title, _duration, _publicTime, real_mid, '') then
+            -- raise notice 'Video verification failed.';
             return null;
         end if;
         bv := generate_unique_bv();
         insert into video_info (bv, title, ownMid, commitTime, publicTime, duration, descr)
-            values (bv, _title, auth_mid, now(), _publicTime, _duration, _descr);
+            values (bv, _title, real_mid, now(), _publicTime, _duration, _descr);
         return bv;
     end $$ language plpgsql;
 
@@ -764,17 +822,20 @@ create or replace function del_video(
     _bv varchar(25)
 )
     returns boolean as $$
+    declare
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
         if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
+            -- raise notice 'Video not found.';
             return false;
         end if;
-        if auth_mid = (select ownMid from video_active_super where bv = _bv) or
-            ((select identity from user_active where user_active.mid = auth_mid) = 'SUPER') then
+        if real_mid = (select ownMid from video_active_super where bv = _bv) or
+            ((select identity from user_active where user_active.mid = real_mid) = 'SUPER') then
             update video_info set active = false where bv = _bv;
             update danmu_info set active = false where bv = _bv;
             return true;
@@ -794,24 +855,27 @@ create or replace function update_video(
     _publicTime timestamp
 )
     returns boolean as $$
+    declare
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
         if (select count(*) from video_active_super
-            where bv = _bv and ownMid = auth_mid and duration = _duration) = 0 then
-            raise notice 'Video not found / duration changed.';
+            where bv = _bv and ownMid = real_mid and duration = _duration) = 0 then
+            -- raise notice 'Video not found / duration changed.';
             return false;
         end if;
-        if not verify_video_req(_title, _duration, _publicTime, auth_mid) then
-            raise notice 'Video verification failed.';
+        if not verify_video_req(_title, _duration, _publicTime, real_mid, _bv) then
+            -- raise notice 'Video verification failed.';
             return false;
         end if;
         if (select count(*) from video_active_super
             where bv = _bv and title = _title and descr = _descr
                 and publicTime = _publicTime) > 0 then
-            raise notice 'Nothing changes.';
+            -- raise notice 'Nothing changes.';
             return false;
         end if;
         update video_info set
@@ -836,45 +900,45 @@ create or replace function search_video(
     page_size int,
     page_num int
 )
-    returns table(bv varchar(25)) as $$
+    returns varchar(25)[] as $$
+	declare
+		real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
-            return query select bv where false;
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
+            return null;
         end if;
-        if keywords is null or keywords = '' then
-            raise notice 'No keyword provided.';
-            return query select bv where false;
-        end if;
-        return query
-	        with word_set as (
-	            select regexp_split_to_table(keywords, E'\\s+') as word
-	        )
-	        select watch_cnt.bv from
-	            (select user_watch_video.bv, count(*) as cnt
-	                from user_watch_video group by user_watch_video.bv
-	            ) as watch_cnt
-	        join
-	            (select tmp1.bv, revMid, publicTime, ownMid, sum(
-		                (case when (select regexp_matches(tmp1.title, word, 'g')) is not null
-		                    then (select array_length(regexp_matches(tmp1.title, word, 'g'), 1) as arr_len limit 1) else 0 end) +
-		                (case when (select regexp_matches(tmp1.descr, word, 'g')) is not null
-		                    then (select array_length(regexp_matches(tmp1.descr, word, 'g'), 1) as arr_len limit 1) else 0 end) +
-		                (case when (select regexp_matches(tmp1.name, word, 'g')) is not null
-		                    then (select array_length(regexp_matches(tmp1.name, word, 'g'), 1) as arr_len limit 1) else 0 end)
-		            ) as relevance
-	                from (
-	                    (select video_active_super.bv, title, descr, ownMid, name, revMid, publicTime
-	                        from (video_active_super join user_active on ownMid = mid)) tmp2
-	                    join word_set on true
-	                ) as tmp1 group by tmp1.bv, revMid, publicTime, ownMid
-	            ) tmp4
-	        on watch_cnt.bv = tmp4.bv
-	        where (tmp4.revMid is not null and tmp4.publicTime < now()
-	            or tmp4.ownMid = auth_mid
-	            or (select identity from user_active where mid = auth_mid) = 'SUPER')
-	            and relevance > 0
-	        order by relevance desc, cnt desc limit page_size offset ((page_num - 1) * page_size);
+        return (
+            with word_set as (
+                select cast(regexp_split_to_table(keywords, E'\\\\s+') as varchar(25)) as word
+			)
+	        select array_agg(ans) from (
+		        select tmp4.bv as ans from
+		            (select user_watch_video.bv, count(*) as cnt
+		                from user_watch_video group by user_watch_video.bv
+		            ) as watch_cnt
+		        join
+		            (select tmp1.bv, revMid, publicTime, ownMid, sum(
+				            (select regexp_count(tmp1.title || ' ' || coalesce(tmp1.descr, '') || ' ' || tmp1.name, word, 1, 'i'))
+			            ) as relevance
+		                from (
+		                    (select video_active_super.bv, title, descr, ownMid, name, revMid, publicTime
+		                        from (video_active_super join user_active on ownMid = mid)) tmp2
+		                    cross join word_set
+		                ) as tmp1
+		                group by tmp1.bv, revMid, publicTime, ownMid
+		            ) tmp4
+		        on watch_cnt.bv = tmp4.bv
+		        where ((tmp4.revMid is not null and tmp4.publicTime < now())
+		            or tmp4.ownMid = real_mid
+		            or (select identity from user_active where mid = real_mid) = 'SUPER')
+		            and relevance > 0
+		        group by tmp4.bv, relevance, watch_cnt.cnt
+		        order by relevance desc, cnt desc
+		        limit page_size offset ((page_num - 1) * page_size)
+		    ) as tmpx
+		);
     end $$ language plpgsql;
 
 create or replace function get_avg_view_rate(_bv varchar(25))
@@ -884,26 +948,27 @@ create or replace function get_avg_view_rate(_bv varchar(25))
         _avg double precision;
     begin
         if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
+            -- raise notice 'Video not found.';
             return -1;
         end if;
         select count(*), avg(lastpos) into _cnt, _avg from user_watch_video where bv = _bv;
         if _cnt = 0 then
-            raise notice 'No one has watched this video.';
+            -- raise notice 'No one has watched this video.';
             return -1;
         end if;
         return _avg / (select duration from video_active_super where bv = _bv);
     end $$ language plpgsql;
 
 create or replace function get_hotspot(_bv varchar(25))
-    returns table(chunkId int) as $$
+    returns table(chunkId int[]) as $$
     begin
         if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise exception 'Video not found.';
+            -- raise notice 'Video not found.';
+            return query select array_agg(0) where false;
         end if;
         return query
-        select chunkId from (
-            select chunkId, cnt, max(cnt) over() as maxx from (
+        select array_agg(cast(hotspot.chunkId as int)) from (
+            select danmu_cnt.chunkId, cnt, max(cnt) over() as maxx from (
                 select floor(showtime / 10) as chunkId, count(*) as cnt
                     from danmu_info where bv = _bv group by chunkId
             ) as danmu_cnt
@@ -921,34 +986,36 @@ create or replace function rev_video(
     declare
         _ownMid bigint;
         _revMid bigint;
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
         if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise notice 'Video not found.';
+            -- raise notice 'Video not found.';
             return false;
         end if;
-        if (select identity from user_active where mid = auth_mid) = 'USER' then
-            raise notice 'Insufficient permission.';
+        if (select identity from user_active where mid = real_mid) = 'USER' then
+            -- raise notice 'Insufficient permission.';
             return false;
         end if;
         select ownMid, revMid into _ownMid, _revMid from video_active_super where bv = _bv;
-        if _ownMid = auth_mid then
-            raise notice 'Cannot review own video.';
+        if _ownMid = real_mid then
+            -- raise notice 'Cannot review own video.';
             return false;
         end if;
         if _revMid is not null then
-            raise notice 'Video has been reviewed.';
+            -- raise notice 'Video has been reviewed.';
             return false;
         end if;
         begin
             update video_info
-                set revMid = auth_mid, reviewTime = now()
+                set revMid = real_mid, reviewTime = now()
                 where bv = _bv;
         exception when others then
-            raise notice 'Review failed.';
+            -- raise notice 'Review failed.';
             return false;
         end;
         return true;
@@ -964,32 +1031,34 @@ create or replace function coin_video(
     returns boolean as $$
     declare
         _ownMid bigint;
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select identity from user_active where mid = auth_mid) = 'USER' then
+        if (select identity from user_active where mid = real_mid) = 'USER' then
             if (select count(*) from video_active where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
+                -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         else
             if (select count(*) from video_active_super where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
+                -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         end if;
         _ownMid := (select ownMid from video_active_super where bv = _bv);
-        if (_ownMid = auth_mid) then
-            raise notice 'Cannot coin your own video';
+        if (_ownMid = real_mid) then
+            -- raise notice 'Cannot coin your own video';
             return false;
         end if;
         begin
-            insert into user_coin_video (mid, bv) values (auth_mid, _bv);
-            update user_info set coin = coin - 1 where mid = auth_mid;
+            insert into user_coin_video (mid, bv) values (real_mid, _bv);
+            update user_info set coin = coin - 1 where mid = real_mid;
         exception when others then
-            raise notice 'Coin failed.';
+            -- raise notice 'Coin failed.';
             return false;
         end;
         return true;
@@ -1005,32 +1074,34 @@ create or replace function like_video(
     returns boolean as $$
     declare
         _ownMid bigint;
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select identity from user_active where mid = auth_mid) = 'USER' then
+        if (select identity from user_active where mid = real_mid) = 'USER' then
             if (select count(*) from video_active where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
+                -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         else
             if (select count(*) from video_active_super where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
+                -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         end if;
         _ownMid := (select ownMid from video_active_super where bv = _bv);
-        if (_ownMid = auth_mid) then
-            raise notice 'Cannot coin your own video';
+        if (_ownMid = real_mid) then
+            -- raise notice 'Cannot coin your own video';
             return false;
         end if;
         begin
             insert into user_like_video (mid, bv)
-                values (auth_mid, _bv);
+                values (real_mid, _bv);
         exception when others then
-            raise notice 'Like failed.';
+            -- raise notice 'Like failed.';
             return false;
         end;
         return true;
@@ -1042,36 +1113,38 @@ create or replace function fav_video(
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     _bv varchar(25)
-				)
+)
     returns boolean as $$
     declare
         _ownMid bigint;
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select identity from user_active where mid = auth_mid) = 'USER' then
+        if (select identity from user_active where mid = real_mid) = 'USER' then
             if (select count(*) from video_active where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
+                -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         else
             if (select count(*) from video_active_super where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
+                -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         end if;
         _ownMid := (select ownMid from video_active_super where bv = _bv);
-        if (_ownMid = auth_mid) then
-            raise notice 'Cannot collect your own video';
+        if (_ownMid = real_mid) then
+            -- raise notice 'Cannot collect your own video';
             return false;
         end if;
         begin
             insert into user_fav_video (mid, bv)
-                values (auth_mid, _bv);
+                values (real_mid, _bv);
         exception when others then
-            raise notice 'Collection failed.';
+            -- raise notice 'Collection failed.';
             return false;
         end;
         return true;
@@ -1082,7 +1155,7 @@ create or replace function fav_video(
 -- functions for DanmuServiceImpl
 create or replace function send_danmu (
     auth_mid bigint,
-    auth_pwd char(256),
+    auth_pwd varchar(260),
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     _bv varchar(25),
@@ -1092,46 +1165,37 @@ create or replace function send_danmu (
     returns bigint as $$
     declare
         _danmu_id bigint;
-        public_time timestamp;
+        real_mid bigint;
+        time timestamp;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return -1;
         end if;
-        if (select identity from user_active where mid = auth_mid) = 'USER' then
-            if (select count(*) from video_active where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
-                return -1;
-            end if;
-        else
-            if (select count(*) from video_active_super where bv = _bv) = 0 then
-                raise notice 'Video doesn''t exist.';
-                return -1;
-            end if;
-        end if;
-        if _content is null or _content = '' then
-            raise notice 'Content is empty.';
+        if not exists(select 1 from video_active where bv = _bv) then
+            -- raise notice 'Video doesn''t exist.';
             return -1;
         end if;
-        public_time := (select publicTime from video_active_super where bv = _bv);
-        if public_time is not null and public_time > now() then
-            raise notice 'Public time is invalid.';
+        if not exists(select 1 from user_watch_video
+            where mid = real_mid and bv = _bv) then
+            -- raise notice 'You should watch the video first.';
             return -1;
         end if;
-        if (select count(*) from user_watch_video
-            where mid = auth_mid and bv = _bv) = 0 then
-            raise notice 'You should watch the video first.';
+        if (show_time not between 0 and (select duration from video_active where _bv = bv)) then
+            -- raise notice 'Invaild show_time.';
             return -1;
         end if;
+        time := now();
         begin
             insert into danmu_info (bv, senderMid, showtime, content, postTime)
-                values (_bv, auth_mid, show_time, _content, now());
-            select danmu_id into _danmu_id from danmu_info
-                where bv = _bv and senderMid = auth_mid and showtime = show_time;
+                values (_bv, real_mid, show_time, _content, time);
         exception when others then
-                raise notice 'Send danmu failed.';
+                -- raise notice 'Send danmu failed.';
                 return -1;
         end;
+        select danmu_id into _danmu_id from danmu_info
+            where bv = _bv and senderMid = real_mid and postTime = time;
         return _danmu_id;
     end $$ language plpgsql;
 
@@ -1141,55 +1205,67 @@ create or replace function display_danmu (
     end_time float8,
     _filter boolean
 )
-    returns table(danmu_id bigint) as $$
+    returns bigint[] as $$
     begin
         if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise exception 'Video not found.';
+            -- raise notice 'Video not found.';
+            return null;
         end if;
         if (start_time > end_time or start_time < 0
             or end_time > (select duration from video_active_super where bv = _bv)) then
-            raise exception 'Time is invalid.';
+            -- raise notice 'Time is invalid.';
+            return null;
         end if;
         if _filter then
-            return query
-            with allDanmu as (
-                select danmu_id, content, postTime from danmu_active
-                    where bv = _bv and showTime between start_time and end_time
-            )
-            select array_agg(danmu_id) from (
-                select danmu_id, postTime,
-                    min(posttime) over(partition by content) as firstPosted
-                from allDanmu
-            ) as DPP where postTime = firstPosted;
+            return (
+	            with allDanmu as (
+	                select danmu_active.danmu_id, content, postTime from danmu_active
+	                    where danmu_active.bv = _bv and showTime between start_time and end_time
+	            )
+	            select array_agg(DPP.danmu_id) from (
+	                select allDanmu.danmu_id, postTime,
+	                    min(posttime) over(partition by content) as firstPosted
+	                from allDanmu
+	            ) as DPP where postTime = firstPosted
+	        );
         else
-            return query
-            select array_agg(danmu_id) from danmu_active
-                where bv = _bv and showTime between start_time and end_time;
+            return (
+	            select array_agg(danmu_active.danmu_id) from danmu_active
+	                where bv = _bv and showTime between start_time and end_time
+	        );
         end if;
     end $$ language plpgsql;
 
 create or replace function like_danmu (
     auth_mid bigint,
-    auth_pwd char(256),
+    auth_pwd varchar(260),
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     _danmu_id bigint
 )
     returns boolean as $$
+    declare
+        real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise notice 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select count(*) from danmu_active where danmu_id = _danmu_id) = 0 then
-            raise notice 'Danmu not found.';
+        if not exists(select 1 from danmu_active where danmu_id = _danmu_id) then
+            -- raise notice 'Danmu not found.';
+            return false;
+        end if;
+        if not exists(select 1 from user_watch_video
+            where mid = real_mid and bv = (select bv from danmu_info where danmu_id = _danmu_id)) then
+            -- raise notice 'You should watch the video first.';
             return false;
         end if;
         begin
             insert into user_like_danmu(danmu_id, mid)
-                values (_danmu_id, auth_mid);
+                values (_danmu_id, real_mid);
         exception when others then
-            raise notice 'Like danmu failed.';
+            -- raise notice 'Like danmu failed.';
             return false;
         end;
         return true;
@@ -1198,135 +1274,157 @@ create or replace function like_danmu (
 
 
 -- functions for RecommenderServiceImpl
-create or replace function recommend_next_video (_bv text)
-    returns table(bv text) as $$
+create or replace function recommend_next_video (_bv varchar(25))
+    returns varchar(25)[] as $$
     begin
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
-            raise exception 'Video not found.';
+        if (select exists(select 1 from video_active_super where bv = _bv) = false) then
+            -- raise notice 'Video not found.';
+            return null;
         end if;
-        return query
-        select array_agg(bv) as cnt from (
-	        (select mid from user_watch_video where bv = _bv) as watchedBv
-            join user_watch_video on watchedBv.mid = user_watch_video.mid)
-		    group by bv order by count(bv) desc limit 5;
+        return (
+	        select array_agg(rec_next_tmp.bv) from (
+	                select user_watch_video.bv from user_watch_video
+	                    where mid in (
+	                        select mid from user_watch_video where user_watch_video.bv = _bv
+	                    ) and user_watch_video.bv != _bv
+				    group by user_watch_video.bv
+				    order by count(user_watch_video.bv) desc, user_watch_video.bv
+				    limit 5
+	            ) rec_next_tmp
+		);
     end $$ language plpgsql;
 
 create or replace function general_recommendations (
 	page_size int,
 	page_num int
 )
-	returns table(bv varchar(25)[]) as $$
+	returns varchar(25)[] as $$
     begin
-        if page_size <= 0 or page_num <= 0 then
-            raise notice 'Page size or page number is invalid.';
-            return;
-        end if;
-        return query
+        return (
             with auxCnt as (
-                select user_like_video.bv, count(*) as cnt from user_like_video group by user_like_video.bv
+                select user_watch_video.bv, count(*) as cnt from user_watch_video group by user_watch_video.bv
             )
             select array_agg(tmp.bv) from (
                 select video_active_super.bv, (
                     case
-                        when (select cnt from auxCnt where auxCnt.bv = video_active_super.bv) = 0
-                            then 0
-                        else ((
-                            (select least(count(*), (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
-                                from user_like_video where user_like_video.bv = video_active_super.bv) +
-                            (select least(count(*), (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
-                                from user_coin_video where user_coin_video.bv = video_active_super.bv) +
-                            (select least(count(*), (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
-                                from user_fav_video where user_fav_video.bv = video_active_super.bv) +
-                            (select count(*) from danmu_info where danmu_info.bv = video_active_super.bv) +
-                            (select sum(lastpos) from user_watch_video where user_watch_video.bv = video_active_super.bv)
-                                / video_active_super.duration
-                        ) / (select cnt from auxCnt where auxCnt.bv = video_active_super.bv))
-                    end) as score from video_active_super order by score desc
+                        when cnt = 0 then 0
+                        else ((coalesce(cnt_like, 0) + coalesce(cnt_coin, 0) + coalesce(cnt_fav, 0)
+                            + coalesce(cnt_danmu, 0) + coalesce(cnt_watch, 0) / video_active_super.duration) / cnt)
+                    end) as score
+                    from video_active_super join auxCnt on video_active_super.bv = auxCnt.bv
+                        left join (select count(*) as cnt_like, bv from user_like_video group by bv) as likeCnt
+							on video_active_super.bv = likeCnt.bv
+						left join (select count(*) as cnt_coin, bv from user_coin_video group by bv) as coinCnt
+							on video_active_super.bv = coinCnt.bv
+						left join (select count(*) as cnt_fav, bv from user_fav_video group by bv) as favCnt
+							on video_active_super.bv = favCnt.bv
+						left join (select count(*) as cnt_danmu, bv from danmu_info group by bv) as danmuCnt
+							on video_active_super.bv = danmuCnt.bv
+						left join (select sum(lastpos) as cnt_watch, bv from user_watch_video group by bv) as watchCnt
+							on video_active_super.bv = watchCnt.bv
+                    order by score desc
                     limit page_size offset (page_num - 1) * page_size
-            ) as tmp;
+            ) as tmp
+        );
     end; $$ language plpgsql;
 
 create or replace function recommend_video_for_user (
     auth_mid bigint,
-    auth_pwd char(256),
+    auth_pwd varchar(260),
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     page_size int,
     page_num int
 )
-    returns table(bv text) as $$
+    returns varchar(25)[] as $$
+    declare
+    	real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise exception 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
+            return null;
         end if;
-        if page_size <= 0 or page_num <= 0 then
-            raise exception 'Page size or page number is invalid.';
-        end if;
-        if (select identity from user_active where mid = auth_mid) = 'USER' then
-			return query
-	        with friends as (
-	            select star_mid from user_follow where fan_mid = auth_mid
-	            intersect
-	            select fan_mid from user_follow where star_mid = auth_mid
-	        )
-	        select array_agg(validBv.bv) from (
-                select bv, count(*) as cnt from user_watch_video
-                    where mid in (select * from friends) and bv not in (
-                        select bv from user_watch_video where mid = auth_mid
-                    ) group by bv) validBv
-                join video_active_super on video_active_super.bv = validBv.bv
-                join user_active on user_active.mid = video_active_super.ownMid
-                order by cnt desc, level desc, publicTime desc
-	            limit page_size offset (page_num - 1) * page_size;
+        if (select exists(
+            select star_mid as f_mid from user_follow where fan_mid = real_mid
+			intersect
+			select fan_mid as f_mid from user_follow where star_mid = real_mid) = false) then
+			return general_recommendations(page_size, page_num);
+		end if;
+        if (select identity from user_active where mid = real_mid) = 'USER' then
+			return (
+				select array_agg(bv) from (
+			        select validBv1.bv from (
+		                select bv, count(*) as cnt from user_watch_video
+		                    where mid in (select f_mid from (
+		                        select star_mid as f_mid from user_follow where fan_mid = real_mid
+							    intersect
+							    select fan_mid as f_mid from user_follow where star_mid = real_mid
+		                    ) as fr1) and bv not in (
+		                        select bv from user_watch_video where mid = real_mid
+		                    ) group by bv) validBv1
+		                join video_active_super on video_active_super.bv = validBv1.bv
+		                join user_active on user_active.mid = video_active_super.ownMid
+                        where exists (select 1 from video_active where bv = validBv1.bv)
+                            or exists (select 1 from video_active_super where bv = validBv1.bv and ownmid = real_mid)
+		                order by cnt desc, level desc, publicTime desc
+			            limit page_size offset (page_num - 1) * page_size
+			    ) as tmp_rvfu1
+		    );
         else
-            return query
-	        with friends as (
-	            select star_mid from user_follow where fan_mid = auth_mid
-	            intersect
-	            select fan_mid from user_follow where star_mid = auth_mid
-	        )
-	        select array_agg(validBv.bv) from (
-	            select bv, count(*) as cnt from user_watch_video
-	                where mid in (select * from friends) and bv not in (
-	                    select bv from user_watch_video where mid = auth_mid
-	                ) group by bv) validBv
-	            join video_active on video_active.bv = validBv.bv
-	            join user_active on user_active.mid = video_active.ownMid
-	            order by cnt desc, level desc, publicTime desc
-	            limit page_size offset (page_num - 1) * page_size;
+            return (
+                select array_agg(bv) from (
+		            select validBv2.bv from (
+			            select bv, count(*) as cnt from user_watch_video
+			                where mid in (select f_mid from (
+		                        select star_mid as f_mid from user_follow where fan_mid = real_mid
+							    intersect
+							    select fan_mid as f_mid from user_follow where star_mid = real_mid
+		                    ) as fr2) and bv not in (
+			                    select bv from user_watch_video where mid = real_mid
+			                ) group by bv) validBv2
+			            join video_active_super on video_active_super.bv = validBv2.bv
+			            join user_active on user_active.mid = video_active_super.ownMid
+			            order by cnt desc, level desc, publicTime desc
+			            limit page_size offset (page_num - 1) * page_size
+			    ) as tmp_rvfu2
+		    );
         end if;
     end $$ language plpgsql;
 
 create or replace function recommend_friends (
     auth_mid bigint,
-    auth_pwd char(256),
+    auth_pwd varchar(260),
     auth_qqid varchar(50),
     auth_wxid varchar(50),
     page_size int,
     page_num int
 )
-    returns table(bv text) as $$
+    returns bigint[] as $$
+    declare
+    	real_mid bigint;
     begin
-        if (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid)) < 0 then
-            raise exception 'Authentication failed.';
+        real_mid := (select verify_auth(auth_mid, auth_pwd, auth_qqid, auth_wxid));
+        if real_mid < 0 then
+            -- raise notice 'Authentication failed.';
+            return null;
         end if;
-        if page_size <= 0 or page_num <= 0 then
-            raise exception 'Page size or page number is invalid.';
-        end if;
-        return query
-        with newFriends as (
-            select fan_mid as mid, count(fan_mid) as cnt from
-            (select star_mid from user_follow where fan_mid = auth_mid) myFollowings
-                join user_follow on myFollowings.star_mid = user_follow.star_mid
-            where fan_mid not in (select star_mid from user_follow where fan_mid = auth_mid)
-                and fan_mid <> auth_mid
-            group by fan_mid
-        )
-        select array_agg(user_active.mid)
-            from newFriends join user_active
-                on newFriends.mid = user_active.mid
-            order by cnt desc, level desc limit page_size offset (page_num - 1) * page_size;
-    end; $$ language plpgsql;
+        return (
+	        with newFriends as (
+	            select uf.fan_mid as uf_mid, count(*) as cnt from
+	            (select user_follow.star_mid from user_follow where user_follow.fan_mid = real_mid) myFollowings
+	                join user_follow as uf on myFollowings.star_mid = uf.star_mid
+	            where uf.fan_mid not in (select user_follow.star_mid from user_follow where user_follow.fan_mid = real_mid)
+	                and uf.fan_mid <> real_mid
+	            group by uf.fan_mid
+	        )
+	        select array_agg(tmp_rfs.mid) from (
+	            select user_active.mid from newFriends join user_active
+	                on newFriends.uf_mid = user_active.mid
+	            order by cnt desc, level desc, mid limit page_size offset (page_num - 1) * page_size
+	        )tmp_rfs
+		);
+    end $$ language plpgsql;
 		""";
 		try (Connection conn = dataSource.getConnection();
 			PreparedStatement stmt = conn.prepareStatement(createFunctions)) {
@@ -1335,17 +1433,17 @@ create or replace function recommend_friends (
 			throw new RuntimeException(e);
 		}
 
-		String addUserTrigger = """
-create or replace trigger user_reg_trigger
-    before insert on user_info for each row
-    execute procedure user_reg_check();
-		""";
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(addUserTrigger)) {
-			stmt.execute();
-		} catch (SQLException e) {
-			throw new RuntimeException(e);
-		}
+//		String addUserTrigger = """
+//create or replace trigger user_reg_trigger
+//    before insert on user_info for each row
+//    execute procedure user_reg_check();
+//		""";
+//		try (Connection conn = dataSource.getConnection();
+//		     PreparedStatement stmt = conn.prepareStatement(addUserTrigger)) {
+//			stmt.execute();
+//		} catch (SQLException e) {
+//			throw new RuntimeException(e);
+//		}
 	}
 
 	/**

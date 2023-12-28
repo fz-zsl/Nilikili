@@ -9,11 +9,6 @@ logging:
     root: off
     io.sustc: debug
 
-logging:
-  level:
-    root: off
-    io.sustc: debug
-
 ---
 
 benchmark:

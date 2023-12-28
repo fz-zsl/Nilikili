@@ -13,7 +13,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 @Service
@@ -39,6 +38,12 @@ public class UserServiceImpl implements UserService {
 	 */
 	@Override
 	public long register(RegisterUserReq req) {
+		if (req == null || req.getName() == null || req.getName().isEmpty() ||
+				req.getSex() == null || req.getSex().toString().isEmpty() ||
+				req.getPassword() == null || req.getPassword().isEmpty()) {
+//			log.error("Invalid request.");
+			return -1;
+		}
 		String userRegisterSQL = "select user_reg_sustc(?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(userRegisterSQL)) {
@@ -53,7 +58,7 @@ public class UserServiceImpl implements UserService {
 			rs.next();
 			return rs.getLong(1);
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
+//			log.error("SQL error: {}", e.getMessage());
 			return -1;
 		}
 	}
@@ -145,152 +150,42 @@ public class UserServiceImpl implements UserService {
 	public UserInfoResp getUserInfo(long mid) {
 		// handle invalid mid
 		if (mid <= 0) {
-			log.error("Invalid mid.");
-			return null;
+//			log.error("Invalid mid.");
+			return new UserInfoResp();
 		}
-		String getMidSQL = "select count(*) from user_active where mid = ?";
+		String userGetInfoSQL = "select * from get_user_info(?)";
+		int coin;
+		Long[] following;
+		Long[] follower;
+		String[] watched;
+		String[] liked;
+		String[] collected;
+		String[] posted;
 		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getMidSQL)) {
+		     PreparedStatement stmt = conn.prepareStatement(userGetInfoSQL)) {
 			stmt.setLong(1, mid);
 			ResultSet rs = stmt.executeQuery();
-			rs.next();
-			if (rs.getInt(1) == 0) {
-				log.error("User not found.");
-				return null;
+			if (!rs.next()) {
+//				log.error("Cannot find user with mid {}.", mid);
+				return new UserInfoResp();
 			}
+			coin = rs.getInt(1);
+			if (rs.getArray(2) == null) following = new Long[0];
+			else following = (Long[]) rs.getArray(2).getArray();
+			if (rs.getArray(3) == null) follower = new Long[0];
+			else follower = (Long[]) rs.getArray(3).getArray();
+			if (rs.getArray(4) == null) watched = new String[0];
+			else watched = (String[]) rs.getArray(4).getArray();
+			if (rs.getArray(5) == null) liked = new String[0];
+			else liked = (String[]) rs.getArray(5).getArray();
+			if (rs.getArray(6) == null) collected = new String[0];
+			else collected = (String[]) rs.getArray(6).getArray();
+			if (rs.getArray(7) == null) posted = new String[0];
+			else posted = (String[]) rs.getArray(7).getArray();
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
+//			log.error("SQL error: {}", e.getMessage());
+			return new UserInfoResp();
 		}
-		// get user info in SQL
-		// coin
-		String getCoinSQL = "select coin from user_active where mid = ?";
-		int coin;
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getCoinSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				rs.next();
-				coin = rs.getInt("coin");
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		// following
-		String getFollowingSQL = """
-select star_mid from user_follow
-	where fan_mid = ? and star_mid in (select mid from user_active)
-		""";
-		ArrayList<Long> followingList = new ArrayList<>();
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getFollowingSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					followingList.add(rs.getLong("star_mid"));
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		Long[] following = followingList.toArray(new Long[0]);
-		// follower
-		String getFollowerSQL = """
-select fan_mid from user_follow
-	where star_mid = ? and fan_mid in (select mid from user_active)
-		""";
-		ArrayList<Long> followerList = new ArrayList<>();
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getFollowerSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					followerList.add(rs.getLong("fan_mid"));
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		Long [] follower = followerList.toArray(new Long[0]);
-		// watched
-		String getWatchedSQL = """
-(select bv from user_watch_video where mid = ?)
-intersect (select bv from video_active)
-		""";
-		ArrayList<String> watchedList = new ArrayList<>();
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getWatchedSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					watchedList.add(rs.getString("bv"));
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		String [] watched = watchedList.toArray(new String[0]);
-		// liked
-		String getLikedSQL = """
-(select bv from user_like_video where mid = ?)
-intersect (select bv from video_active)
-		""";
-		ArrayList<String> likedList = new ArrayList<>();
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getLikedSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					likedList.add(rs.getString("bv"));
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		String [] liked = likedList.toArray(new String[0]);
-		// collected
-		String getCollectedSQL = """
-(select bv from user_fav_video where mid = ?)
-intersect (select bv from video_active)
-		""";
-		ArrayList<String> collectedList = new ArrayList<>();
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getCollectedSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					collectedList.add(rs.getString("bv"));
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		String [] collected = collectedList.toArray(new String[0]);
-		// posted
-		String getPostedSQL = """
-(select bv from video_info where ownMid = ?)
-intersect (select bv from video_active)
-		""";
-		ArrayList<String> postedList = new ArrayList<>();
-		try (Connection conn = dataSource.getConnection();
-		     PreparedStatement stmt = conn.prepareStatement(getPostedSQL)) {
-			stmt.setLong(1, mid);
-			try (ResultSet rs = stmt.executeQuery()) {
-				while (rs.next()) {
-					postedList.add(rs.getString("bv"));
-				}
-			}
-		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
-		}
-		String [] posted = postedList.toArray(new String[0]);
 		return UserInfoResp.builder()
 				.mid(mid)
 				.coin(coin)

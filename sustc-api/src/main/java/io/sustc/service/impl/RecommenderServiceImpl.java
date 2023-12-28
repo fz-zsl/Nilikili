@@ -4,6 +4,7 @@ import io.sustc.dto.AuthInfo;
 import io.sustc.service.RecommenderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.server.Cookie;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -12,6 +13,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -35,19 +38,23 @@ public class RecommenderServiceImpl implements RecommenderService {
 	@Override
 	public List<String> recommendNextVideo(String bv) {
 		String recommendSQL = "select recommend_next_video(?)";
-		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					result = (ArrayList<String>) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptyList();
+					}
+					return new ArrayList<>(Arrays.asList((String[]) rs.getArray(1).getArray()));
 				}
-				return result;
+				else {
+					return Collections.emptyList();
+				}
 			}
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
+//			log.error("SQL error: {}", e.getMessage());
+			return Collections.emptyList();
 		}
 	}
 
@@ -81,23 +88,28 @@ public class RecommenderServiceImpl implements RecommenderService {
 	 */
 	@Override
 	public List<String> generalRecommendations(int pageSize, int pageNum) {
+		if (pageSize <= 0 || pageNum <= 0) {
+			return Collections.emptyList();
+		}
 		String recommendSQL = "select general_recommendations(?, ?)";
-		System.out.println(pageSize + " " + pageNum);
-		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setInt(1, pageSize);
-			stmt.setInt(2, (pageNum - 1) * pageSize);
+			stmt.setInt(2, pageNum);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					System.out.println("???");
-					result = (ArrayList<String>) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptyList();
+					}
+					return new ArrayList<>(Arrays.asList((String[]) rs.getArray(1).getArray()));
 				}
-				return result;
+				else {
+					return Collections.emptyList();
+				}
 			}
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
+//			log.error("SQL error: {}", e.getMessage());
+			return Collections.emptyList();
 		}
 	}
 
@@ -129,8 +141,10 @@ public class RecommenderServiceImpl implements RecommenderService {
 	 */
 	@Override
 	public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
+		if (pageSize <= 0 || pageNum <= 0) {
+			return Collections.emptyList();
+		}
 		String recommendSQL = "select recommend_video_for_user(?, ?, ?, ?, ?, ?)";
-		ArrayList<String> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setLong(1, auth.getMid());
@@ -138,16 +152,21 @@ public class RecommenderServiceImpl implements RecommenderService {
 			stmt.setString(3, auth.getQq());
 			stmt.setString(4, auth.getWechat());
 			stmt.setInt(5, pageSize);
-			stmt.setInt(6, (pageNum - 1) * pageSize);
+			stmt.setInt(6, pageNum);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					result = (ArrayList<String>) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptyList();
+					}
+					return new ArrayList<>(Arrays.asList((String[]) rs.getArray(1).getArray()));
 				}
-				return result;
+				else {
+					return Collections.emptyList();
+				}
 			}
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
+//			log.error("SQL error: {}", e.getMessage());
+			return Collections.emptyList();
 		}
 	}
 
@@ -171,8 +190,10 @@ public class RecommenderServiceImpl implements RecommenderService {
 	 */
 	@Override
 	public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
+		if (pageSize <= 0 || pageNum <= 0) {
+			return Collections.emptyList();
+		}
 		String recommendSQL = "select recommend_friends(?, ?, ?, ?, ?, ?)";
-		ArrayList<Long> result = new ArrayList<>();
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(recommendSQL)) {
 			stmt.setLong(1, auth.getMid());
@@ -180,16 +201,21 @@ public class RecommenderServiceImpl implements RecommenderService {
 			stmt.setString(3, auth.getQq());
 			stmt.setString(4, auth.getWechat());
 			stmt.setInt(5, pageSize);
-			stmt.setInt(6, (pageNum - 1) * pageSize);
+			stmt.setInt(6, pageNum);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					result = (ArrayList<Long>) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptyList();
+					}
+					return new ArrayList<>(Arrays.asList((Long[]) rs.getArray(1).getArray()));
 				}
-				return result;
+				else {
+					return Collections.emptyList();
+				}
 			}
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return result;
+//			log.error("SQL error: {}", e.getMessage());
+			return Collections.emptyList();
 		}
 	}
 }

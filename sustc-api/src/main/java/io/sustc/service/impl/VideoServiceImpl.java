@@ -10,10 +10,7 @@ import org.springframework.stereotype.Service;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -43,7 +40,7 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public String postVideo(AuthInfo auth, PostVideoReq req) {
-		System.out.println("Test postVideo");
+//		System.out.println("Test postVideo");
 		String postVideoSQL = "select post_video(?, ?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(postVideoSQL)) {
@@ -83,7 +80,7 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public boolean deleteVideo(AuthInfo auth, String bv) {
-		System.out.println("Test deleteVideo");
+//		System.out.println("Test deleteVideo");
 		String deleteVideoSQL = "select del_video(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(deleteVideoSQL)) {
@@ -125,7 +122,7 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
-		System.out.println("Test updateVideoInfo");
+//		System.out.println("Test updateVideoInfo");
 		String updateVideoInfoSQL = "select update_video(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(updateVideoInfoSQL)) {
@@ -202,31 +199,56 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
-//		System.out.println("Test searchVideo: " + auth.getMid() + " ; " + auth.getPassword() + " ; " + auth.getQq() + " ; " + auth.getWechat() + " ; " + keywords + " ; " + pageSize + " ; " + pageNum);
-		List<String> result = new ArrayList<>();
 		if (pageNum <= 0 || pageSize <= 0) {
-			return result;
+			return Collections.emptyList();
+		}
+		if (keywords == null || keywords.isEmpty()) {
+			return Collections.emptyList();
 		}
 		String searchVideoSQL = "select search_video(?, ?, ?, ?, cast(? as text), ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(searchVideoSQL)) {
 			stmt.setLong(1, auth.getMid());
-			stmt.setString(2, auth.getPassword() == null ? "" : auth.getPassword());
-			stmt.setString(3, auth.getQq() == null ? "" : auth.getQq());
-			stmt.setString(4, auth.getWechat() == null ? "" : auth.getWechat());
-			stmt.setString(5, keywords == null ? "" : keywords);
+			stmt.setString(2, auth.getPassword());
+			stmt.setString(3, auth.getQq());
+			stmt.setString(4, auth.getWechat());
+			stmt.setString(5, keywords
+					.replace("\\", "\\\\")
+					.replace(".", "\\.")
+					.replace("*", "\\*")
+					.replace("?", "\\?")
+					.replace("+", "\\+")
+					.replace("|", "\\|")
+					.replace("{", "\\{")
+					.replace("}", "\\}")
+					.replace("(", "\\(")
+					.replace(")", "\\)")
+					.replace("[", "\\[")
+					.replace("]", "\\]")
+					.replace("^", "\\^")
+					.replace("$", "\\$")
+					.replace("-", "\\-")
+					.replace("#", "\\#")
+					.replace("!", "\\!")
+					.replace("&", "\\&")
+					.replace("_", "\\_")
+					.replace("%", "\\%"));
 			stmt.setInt(6, pageSize);
 			stmt.setInt(7, pageNum);
-//			System.out.println("[Testing search video] " + stmt);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					result = (ArrayList<String>) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptyList();
+					}
+					return new ArrayList<>(Arrays.asList((String[]) rs.getArray(1).getArray()));
 				}
-				return result;
+				else {
+					return Collections.emptyList();
+				}
 			}
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
+//			log.error("SQL error: {}", e.getMessage());
+			return Collections.emptyList();
 		}
 	}
 
@@ -245,7 +267,6 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public double getAverageViewRate(String bv) {
-//		System.out.println("Test getAverageViewRate");
 		String getAverageViewRateSQL = "select get_avg_view_rate(?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(getAverageViewRateSQL)) {
@@ -275,20 +296,24 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	public Set<Integer> getHotspot(String bv) {
-		Set<Integer> result = new HashSet<>();
 		String getHotspotSQL = "select get_hotspot(?)";
 		try (Connection conn = dataSource.getConnection();
 			 PreparedStatement stmt = conn.prepareStatement(getHotspotSQL)) {
 			stmt.setString(1, bv);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					result = (HashSet) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptySet();
+					}
+					return new HashSet<>(Arrays.asList((Integer[]) rs.getArray(1).getArray()));
 				}
-				return result;
+				else {
+					return Collections.emptySet();
+				}
 			}
 		} catch (SQLException e) {
 			log.error("SQL error: {}", e.getMessage());
-			return new HashSet<>();
+			return Collections.emptySet();
 		}
 	}
 

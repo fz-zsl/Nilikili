@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -38,6 +40,9 @@ public class DanmuServiceImpl implements DanmuService {
 	 */
 	@Override
 	public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
+		if (content == null || content.isEmpty()) {
+			return -1;
+		}
 		String sendDanmuSQL = "select send_danmu(?, ?, ?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(sendDanmuSQL)) {
@@ -82,7 +87,9 @@ public class DanmuServiceImpl implements DanmuService {
 	 */
 	@Override
 	public List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter) {
-		ArrayList<Long> result = new ArrayList<>();
+		if (timeStart > timeEnd) {
+			return Collections.emptyList();
+		}
 		String displayDanmuSQL = "select display_danmu(?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(displayDanmuSQL)) {
@@ -92,13 +99,18 @@ public class DanmuServiceImpl implements DanmuService {
 			stmt.setBoolean(4, filter);
 			try (ResultSet rs = stmt.executeQuery()) {
 				if (rs.next()) {
-					result = (ArrayList<Long>) rs.getArray(1);
+					if (rs.getArray(1) == null) {
+						return Collections.emptyList();
+					}
+					return new ArrayList<>(Arrays.asList((Long[]) rs.getArray(1).getArray()));
+				}
+				else {
+					return Collections.emptyList();
 				}
 			}
-			return result;
 		} catch (SQLException e) {
-			log.error("SQL error: {}", e.getMessage());
-			return null;
+//			log.error("SQL error: {}", e.getMessage());
+			return Collections.emptyList();
 		}
 	}
 
