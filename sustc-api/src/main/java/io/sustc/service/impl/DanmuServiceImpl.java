@@ -131,6 +131,23 @@ public class DanmuServiceImpl implements DanmuService {
 	 */
 	@Override
 	public boolean likeDanmu(AuthInfo auth, long id) {
+		if (!DatabaseServiceImpl.startModify) {
+			String dropIndexSQL = """
+drop index if exists user_follow_star_mid_idx;
+drop index if exists user_follow_fan_mid_idx;
+drop index if exists user_watch_video_mid_idx;
+drop index if exists user_watch_video_bv_idx;
+drop index if exists user_coin_video_mid_idx;
+drop index if exists user_coin_video_bv_idx;
+drop index if exists user_like_video_mid_idx;
+drop index if exists user_like_video_bv_idx;
+drop index if exists user_fav_video_mid_idx;
+drop index if exists user_fav_video_bv_idx;
+drop index if exists user_like_danmu_mid_idx;
+drop index if exists user_like_danmu_danmu_id_idx;
+			""";
+			DatabaseServiceImpl.startModify = true;
+		}
 		String likeDanmuSQL = "select like_danmu(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(likeDanmuSQL)) {

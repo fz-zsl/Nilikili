@@ -22,6 +22,8 @@ import java.util.List;
 @Service
 @Slf4j
 public class DatabaseServiceImpl implements DatabaseService {
+	static boolean startModify = false;
+	static int userFollowChunkSize;
 
 	/**
 	 * Getting a {@link DataSource} instance from the framework, whose connections are managed by HikariCP.
@@ -45,9 +47,294 @@ public class DatabaseServiceImpl implements DatabaseService {
 
 
 	class ImportThread1 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread1(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = 0; i < userFollowChunkSize; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+	class ImportThread2 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread2(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize; i < userFollowChunkSize * 2; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+
+	class ImportThread3 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread3(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 2; i < userFollowChunkSize * 3; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+
+	class ImportThread4 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread4(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 3; i < userFollowChunkSize * 4; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+
+	class ImportThread5 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread5(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 4; i < userFollowChunkSize * 5; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+
+	class ImportThread6 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread6(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 5; i < userFollowChunkSize * 6; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+
+	class ImportThread7 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread7(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 6; i < userFollowChunkSize * 7; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+
+	class ImportThread8 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread8(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 7; i < userFollowChunkSize * 8; ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+	class ImportThread9 extends Thread {
+		List<UserRecord> userRecords;
+
+		public ImportThread9(List<UserRecord> userRecords) {
+			this.userRecords = userRecords;
+		}
+
+		@Override
+		public void run() {
+			// load user_follow
+			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
+				conn.setAutoCommit(false);
+				for (int i = userFollowChunkSize * 8; i < userRecords.size(); ++i) {
+					UserRecord userRecord = userRecords.get(i);
+					stmt.setLong(2, userRecord.getMid());
+					for (Long starMid : userRecord.getFollowing()) {
+						stmt.setLong(1, starMid);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
+			}
+		}
+	}
+
+	class ImportThread10 extends Thread {
 		private final List<VideoRecord> videoRecords;
 
-		public ImportThread1(List<VideoRecord> videoRecords) {
+		public ImportThread10(List<VideoRecord> videoRecords) {
 			this.videoRecords = videoRecords;
 		}
 
@@ -92,72 +379,12 @@ public class DatabaseServiceImpl implements DatabaseService {
 		}
 	}
 
-	class ImportThread2 extends Thread {
-		private final List<VideoRecord> videoRecords;
-
-		public ImportThread2(List<VideoRecord> videoRecords) {
-			this.videoRecords = videoRecords;
-		}
-
-		public void run() {
-			// load user_watch_video
-			String insertUserWatchVideoSQL = "insert into user_watch_video values (?, ?, ?);";
-			try (Connection conn = dataSource.getConnection();
-			     PreparedStatement stmt = conn.prepareStatement(insertUserWatchVideoSQL)) {
-				conn.setAutoCommit(false);
-				for (VideoRecord videoRecord : videoRecords) {
-					stmt.setString(2, videoRecord.getBv());
-					int viewerCnt = videoRecord.getViewerMids().length;
-					for (int i = 0; i < viewerCnt; i++) {
-						stmt.setLong(1, videoRecord.getViewerMids()[i]);
-						stmt.setFloat(3, videoRecord.getViewTime()[i]);
-						stmt.addBatch();
-					}
-				}
-				stmt.executeBatch();
-				conn.commit();
-				conn.setAutoCommit(true);
-			} catch (SQLException e) {
-				System.out.println("[ERROR] Fail to insert user_watch_video records, " + e.getMessage());
-			}
-		}
-	}
-
-	class ImportThread3 extends Thread {
-		private final List<UserRecord> userRecords;
-
-		public ImportThread3(List<UserRecord> userRecords) {
-			this.userRecords = userRecords;
-		}
-
-		public void run() {
-			// load user_follow
-			String insertUserFollowSQL = "insert into user_follow values (?, ?);";
-			try (Connection conn = dataSource.getConnection();
-			     PreparedStatement stmt = conn.prepareStatement(insertUserFollowSQL)) {
-				conn.setAutoCommit(false);
-				for (UserRecord userRecord : userRecords) {
-					stmt.setLong(2, userRecord.getMid());
-					for (Long starMid : userRecord.getFollowing()) {
-						stmt.setLong(1, starMid);
-						stmt.addBatch();
-					}
-				}
-				stmt.executeBatch();
-				conn.commit();
-				conn.setAutoCommit(true);
-			} catch (SQLException e) {
-				System.out.println("[ERROR] Fail to insert user_follow records, " + e.getMessage());
-			}
-		}
-	}
-
-	class ImportThread4 extends Thread {
+	class ImportThread11 extends Thread {
 		private final List<UserRecord> userRecords;
 		private final List<VideoRecord> videoRecords;
 		private final List<DanmuRecord> danmuRecords;
 
-		public ImportThread4(List<UserRecord> userRecords, List<VideoRecord> videoRecords, List<DanmuRecord> danmuRecords) {
+		public ImportThread11(List<UserRecord> userRecords, List<VideoRecord> videoRecords, List<DanmuRecord> danmuRecords) {
 			this.userRecords = userRecords;
 			this.videoRecords = videoRecords;
 			this.danmuRecords = danmuRecords;
@@ -281,6 +508,37 @@ insert into video_info (bv, title, ownMid, commitTime, revMid, reviewTime, publi
 		}
 	}
 
+	class ImportThread12 extends Thread {
+		private final List<VideoRecord> videoRecords;
+
+		public ImportThread12(List<VideoRecord> videoRecords) {
+			this.videoRecords = videoRecords;
+		}
+
+		public void run() {
+			// load user_watch_video
+			String insertUserWatchVideoSQL = "insert into user_watch_video values (?, ?, ?);";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(insertUserWatchVideoSQL)) {
+				conn.setAutoCommit(false);
+				for (VideoRecord videoRecord : videoRecords) {
+					stmt.setString(2, videoRecord.getBv());
+					int viewerCnt = videoRecord.getViewerMids().length;
+					for (int i = 0; i < viewerCnt; i++) {
+						stmt.setLong(1, videoRecord.getViewerMids()[i]);
+						stmt.setFloat(3, videoRecord.getViewTime()[i]);
+						stmt.addBatch();
+					}
+				}
+				stmt.executeBatch();
+				conn.commit();
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				System.out.println("[ERROR] Fail to insert user_watch_video records, " + e.getMessage());
+			}
+		}
+	}
+
 
 	/**
 	 * Imports data to an empty database.
@@ -391,20 +649,44 @@ create table user_like_danmu (
 			throw new RuntimeException(e);
 		}
 
-
-		ImportThread1 importThread1 = new ImportThread1(videoRecords);
-		ImportThread2 importThread2 = new ImportThread2(videoRecords);
+		userFollowChunkSize = userRecords.size() / 9;
+		ImportThread1 importThread1 = new ImportThread1(userRecords);
+		ImportThread2 importThread2 = new ImportThread2(userRecords);
 		ImportThread3 importThread3 = new ImportThread3(userRecords);
-		ImportThread4 importThread4 = new ImportThread4(userRecords, videoRecords, danmuRecords);
+		ImportThread4 importThread4 = new ImportThread4(userRecords);
+		ImportThread5 importThread5 = new ImportThread5(userRecords);
+		ImportThread6 importThread6 = new ImportThread6(userRecords);
+		ImportThread7 importThread7 = new ImportThread7(userRecords);
+		ImportThread8 importThread8 = new ImportThread8(userRecords);
+		ImportThread9 importThread9 = new ImportThread9(userRecords);
+		ImportThread10 importThread10 = new ImportThread10(videoRecords);
+		ImportThread11 importThread11 = new ImportThread11(userRecords, videoRecords, danmuRecords);
+		ImportThread12 importThread12 = new ImportThread12(videoRecords);
 		importThread1.start();
 		importThread2.start();
 		importThread3.start();
 		importThread4.start();
+		importThread5.start();
+		importThread6.start();
+		importThread7.start();
+		importThread8.start();
+		importThread9.start();
+		importThread10.start();
+		importThread11.start();
+		importThread12.start();
 		try {
 			importThread1.join();
 			importThread2.join();
 			importThread3.join();
 			importThread4.join();
+			importThread5.join();
+			importThread6.join();
+			importThread7.join();
+			importThread8.join();
+			importThread9.join();
+			importThread10.join();
+			importThread11.join();
+			importThread12.join();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -452,12 +734,27 @@ alter sequence user_info_mid_seq restart with 10000000;
 alter sequence danmu_info_danmu_id_seq restart with 10000000;
 
 -- create index
-create index user_info_name_idx on user_info (name);
-create index user_info_qqid_idx on user_info (qqid);
-create index user_info_wxid_idx on user_info (wxid);
-create index video_info_title_idx on video_info (title);
-create index video_info_ownMid_idx on video_info (ownMid);
-create index danmu_info_bv_idx on danmu_info (bv);
+create index user_info_name_idx on user_info (name) where active = true;
+create index user_info_pwd_idx on user_info (pwd) where active = true;
+create index user_info_qqid_idx on user_info (qqid) where active = true;
+create index user_info_wxid_idx on user_info (wxid) where active = true;
+create index video_info_title_idx on video_info (title) where active = true;
+create index video_info_ownMid_idx on video_info (ownMid) where active = true;
+create index danmu_info_bv_idx on danmu_info (bv) where active = true;
+create index danmu_info_senderMid_idx on danmu_info (senderMid) where active = true;
+create index danmu_info_showTime_idx on danmu_info (showTime) where active = true;
+create index user_follow_star_mid_idx on user_follow (star_mid);
+create index user_follow_fan_mid_idx on user_follow (fan_mid);
+create index user_watch_video_mid_idx on user_watch_video (mid);
+create index user_watch_video_bv_idx on user_watch_video (bv);
+create index user_coin_video_mid_idx on user_coin_video (mid);
+create index user_coin_video_bv_idx on user_coin_video (bv);
+create index user_like_video_mid_idx on user_like_video (mid);
+create index user_like_video_bv_idx on user_like_video (bv);
+create index user_fav_video_mid_idx on user_fav_video (mid);
+create index user_fav_video_bv_idx on user_fav_video (bv);
+create index user_like_danmu_mid_idx on user_like_danmu (mid);
+create index user_like_danmu_danmu_id_idx on user_like_danmu (danmu_id);
 
 
 -- create views
@@ -621,61 +918,45 @@ create or replace function user_reg_sustc(
         end if;
         if _pwd is null or _pwd = '' then
             -- raise notice 'Password cannot be null or empty.';
-            return -2;
+            return -1;
         end if;
         -- new.pwd := digest(new.pwd, 'sha256');
         if _sex is null or _sex = '' then
             -- raise notice 'Sex cannot be null.';
-            return -3;
+            return -1;
         end if;
 		if _birthday is not null and not (_birthday ~ '^\\d{1,2}月\\d{1,2}日$') then
 			-- raise notice 'Birthday format error.';
-			return -4;
+			return -1;
 		end if;
         if (_birthday is not null and _birthday <> '') then
 			begin
 				__birthday := to_date(_birthday, 'MM月DD日');
 			exception when others then
 				-- raise notice 'Birthday format error.';
-				return -5;
+				return -1;
 			end;
 		end if;
 		month := extract(month from __birthday);
 		day := extract(day from __birthday);
-		if month not between 1 and 12 then
+		if month not between 1 and 12 or day not between 1 and 31 then
 			-- raise notice 'Birthday format error.';
-			return -6;
-		end if;
-		if month = 1 or month = 3 or month = 5 or month = 7 or month = 8 or month = 10 or month = 12 then
-			if day not between 1 and 31 then
-				-- raise notice 'Birthday format error.';
-				return -7;
-			end if;
-		elsif month = 4 or month = 6 or month = 9 or month = 11 then
-			if day not between 1 and 30 then
-				-- raise notice 'Birthday format error.';
-				return -8;
-			end if;
-		else
-			if day not between 1 and 29 then
-				-- raise notice 'Birthday format error.';
-				return -9;
-			end if;
+			return -1;
 		end if;
         if _qqid is not null and _qqid <> '' and exists(select 1 from user_active where user_active.qqid = _qqid) then
             -- raise notice 'QQ used.';
-            return -10;
+            return -1;
         end if;
         if _wxid is not null and _wxid <> '' and exists(select 1 from user_active where user_active.wxid = _wxid) then
             -- raise notice 'WeChat used.';
-            return -11;
+            return -1;
         end if;
         begin
 	        insert into user_info (name, sex, birthday, sign, pwd, qqid, wxid)
 	            values (_name, _sex, _birthday, _sign, _pwd, _qqid, _wxid);
         exception when others then
             -- raise notice 'User registration failed.';
-            return -12;
+            return -1;
         end;
         id := (
 			select max(mid) from user_active
@@ -700,7 +981,7 @@ create or replace function user_del_sustc(
             -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select count(*) from user_active where user_active.mid = _mid) = 0 then
+        if not exists(select 1 from user_active where user_active.mid = _mid) then
             -- raise notice 'User not found.';
             return false;
         end if;
@@ -760,13 +1041,12 @@ create or replace function get_user_info (_mid bigint) returns table(
 		return query
 		select
 			(select user_active.coin from user_active where user_active.mid = _mid) as _coin,
-			(select array_agg(star_mid) from user_follow where fan_mid = _mid and star_mid in (select user_active.mid from user_active)) as following,
-			(select array_agg(fan_mid) from user_follow where star_mid = _mid and fan_mid in (select user_active.mid from user_active)) as follower,
+			(select array_agg(star_mid) from user_follow where fan_mid = _mid) as following,
+			(select array_agg(fan_mid) from user_follow where star_mid = _mid) as follower,
 			(select array_agg(bv) from user_watch_video where user_watch_video.mid = _mid) as watched,
 			(select array_agg(bv) from user_like_video where user_like_video.mid = _mid) as liked,
 			(select array_agg(bv) from user_fav_video where user_fav_video.mid = _mid) as faved,
-			(select array_agg(bv) from video_info where ownMid = _mid) as posted
-		from user_active where user_active.mid = _mid;
+			(select array_agg(bv) from video_info where ownMid = _mid) as posted;
 	end $$ language plpgsql;
 
 
@@ -830,7 +1110,7 @@ create or replace function del_video(
             -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
+        if not exists(select 1 from video_active_super where bv = _bv) then
             -- raise notice 'Video not found.';
             return false;
         end if;
@@ -863,8 +1143,8 @@ create or replace function update_video(
             -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select count(*) from video_active_super
-            where bv = _bv and ownMid = real_mid and duration = _duration) = 0 then
+        if not exists(select 1 from video_active_super
+            where bv = _bv and ownMid = real_mid and duration = _duration) then
             -- raise notice 'Video not found / duration changed.';
             return false;
         end if;
@@ -872,9 +1152,9 @@ create or replace function update_video(
             -- raise notice 'Video verification failed.';
             return false;
         end if;
-        if (select count(*) from video_active_super
+        if exists(select 1 from video_active_super
             where bv = _bv and title = _title and descr = _descr
-                and publicTime = _publicTime) > 0 then
+                and publicTime = _publicTime) then
             -- raise notice 'Nothing changes.';
             return false;
         end if;
@@ -911,7 +1191,7 @@ create or replace function search_video(
         end if;
         return (
             with word_set as (
-                select cast(regexp_split_to_table(keywords, E'\\\\s+') as varchar(25)) as word
+                select regexp_split_to_table(keywords, E'\\\\s+') as word
 			)
 	        select array_agg(ans) from (
 		        select tmp4.bv as ans from
@@ -920,7 +1200,9 @@ create or replace function search_video(
 		            ) as watch_cnt
 		        join
 		            (select tmp1.bv, revMid, publicTime, ownMid, sum(
-				            (select regexp_count(tmp1.title || ' ' || coalesce(tmp1.descr, '') || ' ' || tmp1.name, word, 1, 'i'))
+				            (select regexp_count(tmp1.title, word, 1, 'i')) +
+				            (select regexp_count(coalesce(tmp1.descr, ''), word, 1, 'i')) +
+				            (select regexp_count(tmp1.name, word, 1, 'i'))
 			            ) as relevance
 		                from (
 		                    (select video_active_super.bv, title, descr, ownMid, name, revMid, publicTime
@@ -930,10 +1212,9 @@ create or replace function search_video(
 		                group by tmp1.bv, revMid, publicTime, ownMid
 		            ) tmp4
 		        on watch_cnt.bv = tmp4.bv
-		        where ((tmp4.revMid is not null and tmp4.publicTime < now())
+		        where relevance > 0 and ((tmp4.revMid is not null and tmp4.publicTime < now())
 		            or tmp4.ownMid = real_mid
 		            or (select identity from user_active where mid = real_mid) = 'SUPER')
-		            and relevance > 0
 		        group by tmp4.bv, relevance, watch_cnt.cnt
 		        order by relevance desc, cnt desc
 		        limit page_size offset ((page_num - 1) * page_size)
@@ -947,7 +1228,7 @@ create or replace function get_avg_view_rate(_bv varchar(25))
         _cnt int;
         _avg double precision;
     begin
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
+        if not exists(select 1 from video_active_super where bv = _bv) then
             -- raise notice 'Video not found.';
             return -1;
         end if;
@@ -962,7 +1243,7 @@ create or replace function get_avg_view_rate(_bv varchar(25))
 create or replace function get_hotspot(_bv varchar(25))
     returns table(chunkId int[]) as $$
     begin
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
+        if not exists(select 1 from video_active_super where bv = _bv) then
             -- raise notice 'Video not found.';
             return query select array_agg(0) where false;
         end if;
@@ -993,7 +1274,7 @@ create or replace function rev_video(
             -- raise notice 'Authentication failed.';
             return false;
         end if;
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
+        if not exists(select 1 from video_active_super where bv = _bv) then
             -- raise notice 'Video not found.';
             return false;
         end if;
@@ -1039,12 +1320,12 @@ create or replace function coin_video(
             return false;
         end if;
         if (select identity from user_active where mid = real_mid) = 'USER' then
-            if (select count(*) from video_active where bv = _bv) = 0 then
+            if not exists(select 1 from video_active where bv = _bv) then
                 -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         else
-            if (select count(*) from video_active_super where bv = _bv) = 0 then
+            if not exists(select 1 from video_active_super where bv = _bv) then
                 -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
@@ -1082,12 +1363,12 @@ create or replace function like_video(
             return false;
         end if;
         if (select identity from user_active where mid = real_mid) = 'USER' then
-            if (select count(*) from video_active where bv = _bv) = 0 then
+            if not exists(select 1 from video_active where bv = _bv) then
                 -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         else
-            if (select count(*) from video_active_super where bv = _bv) = 0 then
+            if not exists(select 1 from video_active_super where bv = _bv) then
                 -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
@@ -1125,12 +1406,12 @@ create or replace function fav_video(
             return false;
         end if;
         if (select identity from user_active where mid = real_mid) = 'USER' then
-            if (select count(*) from video_active where bv = _bv) = 0 then
+            if not exists(select 1 from video_active where bv = _bv) then
                 -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
         else
-            if (select count(*) from video_active_super where bv = _bv) = 0 then
+            if not exists(select 1 from video_active_super where bv = _bv) then
                 -- raise notice 'Video doesn''t exist.';
                 return false;
             end if;
@@ -1207,7 +1488,7 @@ create or replace function display_danmu (
 )
     returns bigint[] as $$
     begin
-        if (select count(*) from video_active_super where bv = _bv) = 0 then
+        if not exists(select 1 from video_active_super where bv = _bv) then
             -- raise notice 'Video not found.';
             return null;
         end if;
@@ -1433,17 +1714,13 @@ create or replace function recommend_friends (
 			throw new RuntimeException(e);
 		}
 
-//		String addUserTrigger = """
-//create or replace trigger user_reg_trigger
-//    before insert on user_info for each row
-//    execute procedure user_reg_check();
-//		""";
-//		try (Connection conn = dataSource.getConnection();
-//		     PreparedStatement stmt = conn.prepareStatement(addUserTrigger)) {
-//			stmt.execute();
-//		} catch (SQLException e) {
-//			throw new RuntimeException(e);
-//		}
+		String addUserTrigger = "alter system set full_page_writes = off;";
+		try (Connection conn = dataSource.getConnection();
+		     PreparedStatement stmt = conn.prepareStatement(addUserTrigger)) {
+			stmt.execute();
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	/**

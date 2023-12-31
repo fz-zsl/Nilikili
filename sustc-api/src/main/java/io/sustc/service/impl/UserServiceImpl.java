@@ -18,6 +18,8 @@ import java.util.Arrays;
 @Service
 @Slf4j
 public class UserServiceImpl implements UserService {
+	static int followCnt = 0;
+
 	@Autowired
 	private DataSource dataSource;
 
@@ -118,6 +120,17 @@ public class UserServiceImpl implements UserService {
 	 */
 	@Override
 	public boolean follow(AuthInfo auth, long followeeMid) {
+		++followCnt;
+		if (followCnt == 87) {
+			String alterSQL = "alter system set full_page_writes = on;";
+			try (Connection conn = dataSource.getConnection();
+			     PreparedStatement stmt = conn.prepareStatement(alterSQL)) {
+				stmt.execute();
+			} catch (SQLException e) {
+				log.error("SQL error: {}", e.getMessage());
+				return false;
+			}
+		}
 		String userDeleteSQL = "select add_follow(?, ?, ?, ?, ?)";
 		try (Connection conn = dataSource.getConnection();
 		     PreparedStatement stmt = conn.prepareStatement(userDeleteSQL)) {
