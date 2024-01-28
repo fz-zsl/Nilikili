@@ -1,7 +1,8 @@
 # 📺 SUSTech Database System Project 2
 
-![Course](https://img.shields.io/badge/sustech-cs307%2F213-blue)
-![Project2](https://img.shields.io/badge/23_fall-project_2-green)
+![Course](https://img.shields.io/badge/SUSTech-CS213-blue)
+![Project2](https://img.shields.io/badge/23_Fall-Project_2-green)
+![Score](https://img.shields.io/badge/Score-102%2f100-orange)
 
 The world-leading ~~fictional~~ Danmaku video website, _Synchronized User-generated Subtitle Technology Company
 (SUSTC)_, is now hiring your team to build a new backend system for them. Please use the code in this repository as a
